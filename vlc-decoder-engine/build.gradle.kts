@@ -2,7 +2,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.TimeZone
 
-val versionName = "1.0.2"
+val versionName = "1.0.0"
 val jdkVersion = 21
 
 plugins {
@@ -121,17 +121,16 @@ publishing {
 tasks.register("createRelease") {
     group = "publishing"
     doLast {
-        val tagName = "v$versionName"
-        val checkProcess = ProcessBuilder("gh", "release", "view", tagName)
+        val checkProcess = ProcessBuilder("gh", "release", "view", versionName)
             .redirectOutput(ProcessBuilder.Redirect.DISCARD)
             .redirectError(ProcessBuilder.Redirect.DISCARD)
             .start()
         if (checkProcess.waitFor() == 0) {
-            println("Release [$tagName] exist")
+            println("Release [$versionName] exist")
             return@doLast
         }
-        println("Release: $tagName ...")
-        ProcessBuilder("gh", "release", "create", tagName, "--title", tagName, "--generate-notes")
+        println("Release: $versionName ...")
+        ProcessBuilder("gh", "release", "create", versionName, "--title", versionName, "--generate-notes")
             .inheritIO()
             .start()
             .waitFor()
