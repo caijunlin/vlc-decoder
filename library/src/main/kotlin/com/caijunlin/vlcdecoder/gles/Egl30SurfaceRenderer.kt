@@ -23,7 +23,7 @@ class Egl30SurfaceRenderer(
     private val surface: Surface
 ) : IRenderer {
 
-    private val renderThread = HandlerThread("RenderThread")
+    private val renderThread = HandlerThread("Egl30SurfaceRenderer")
 
     @Volatile
     private var frameBuffer: ByteBuffer? = null
