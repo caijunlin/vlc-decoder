@@ -2,7 +2,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.TimeZone
 
-val versionName = "1.0.1"
+val versionName = "1.0.2"
 val jdkVersion = 21
 
 plugins {
