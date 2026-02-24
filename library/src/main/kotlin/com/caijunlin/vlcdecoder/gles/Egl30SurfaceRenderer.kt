@@ -11,11 +11,11 @@ import javax.microedition.khronos.egl.*
  * 高性能单流 VLC + GLES3.0 渲染器
  *
  * 优化点：
- * 1. 使用 PBO 双缓冲异步上传纹理
- * 2. 仅在分辨率变化时分配显存
- * 3. 无 Java 层 memcpy
- * 4. 渲染线程自驱动循环
- * 5. 避免重复 swapBuffers
+ * 使用 PBO 双缓冲异步上传纹理
+ * 仅在分辨率变化时分配显存
+ * 无 Java 层 memcpy
+ * 渲染线程自驱动循环
+ * 避免重复 swapBuffers
  *
  * 适用于 RV16 (RGB565) 数据输入
  */
