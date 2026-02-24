@@ -61,20 +61,24 @@ android {
             consumerProguardFiles("consumer-rules.pro")
         }
     }
+
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
         }
     }
+
     buildFeatures {
         prefab = false
         buildConfig = true
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.toVersion(jdkVersion)
         targetCompatibility = JavaVersion.toVersion(jdkVersion)
     }
+
     publishing {
         singleVariant("release") {
             withSourcesJar()
