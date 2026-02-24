@@ -2,5 +2,5 @@
 /.idea
 /.kotlin
 /build
-/.cxx
+.cxx
 local.properties
