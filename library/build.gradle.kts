@@ -30,7 +30,7 @@ android {
     }
 
     defaultConfig {
-        minSdk = 29
+        minSdk = 26
         @Suppress("UnstableApiUsage")
         externalNativeBuild {
             cmake {
