@@ -7,23 +7,7 @@
 
 # 同样需要引入 Keep 规则，防止自己把自己混淆坏了
 -keeppackagenames com.caijunlin.**
--keeppackagenames org.videolan.**
-
--keepclasseswithmembernames class com.caijunlin.vlcdecoder.**.VlcBridge {
-    native <methods>;
-}
 
 -keep public class com.caijunlin.vlcdecoder.**.VlcStreamManager {
     public <methods>;
 }
-
--keep class org.videolan.** { *; }
-
-# 保护对外的配置枚举
--keep public enum com.caijunlin.vlcdecoder.core.RenderApi {
-    public *;
-}
-
-# 保留 FrameHub 类本身以及它的所有成员（字段、方法）
--keep class com.caijunlin.vlcdecoder.core.FrameHub { *; }
--keep class com.caijunlin.vlcdecoder.core.FrameHub$** { *; }

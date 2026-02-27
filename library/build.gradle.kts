@@ -21,24 +21,8 @@ android {
 
     defaultConfig {
         minSdk = 26
-        @Suppress("UnstableApiUsage")
-        externalNativeBuild {
-            cmake {
-                cppFlags("-std=c++17 -fexceptions")
-                arguments += listOf("-DANDROID_STL=c++_static")
-            }
-        }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
-    }
-
-    sourceSets {
-        getByName("main") {
-            res.srcDirs("src/main/res")
-            assets.srcDirs("src/main/assets")
-            java.srcDirs("src/main/kotlin", "src/main/java")
-            jniLibs.srcDirs("src/main/cpp/libs")
-        }
     }
 
     buildTypes {
@@ -50,18 +34,6 @@ android {
             )
             consumerProguardFiles("consumer-rules.pro")
         }
-    }
-
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
-    }
-
-    buildFeatures {
-        prefab = false
-        buildConfig = true
     }
 
     compileOptions {
@@ -89,6 +61,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
+    implementation(libs.libvlc)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
