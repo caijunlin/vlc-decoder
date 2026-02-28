@@ -1,15 +1,22 @@
 package com.caijunlin.vlcdecoder.core
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.view.Surface
 import com.caijunlin.vlcdecoder.gles.VlcRenderPool
 import org.videolan.libvlc.LibVLC
-import kotlin.text.isEmpty
 
+/**
+ * @author caijunlin
+ * @date   2026/2/28
+ * @description   全局的 VLC 流媒体管理器负责统一初始化 LibVLC 引擎代理底层渲染池的绑定解绑以及提供暂停截图等高级控制指令
+ */
 object VlcStreamManager {
 
+    // 全局唯一的 LibVLC 实例用于创建媒体播放器
     private var libVLC: LibVLC? = null
 
+    // VLC 引擎的底层初始化参数列表包含网络缓存硬件解码等配置
     private val vlcArgs = arrayListOf(
         "--no-audio",
         "--aout=dummy",
@@ -20,38 +27,99 @@ object VlcStreamManager {
         "--codec=mediacodec,all"
     )
 
+    /**
+     * 初始化全局的 LibVLC 引擎并将其注入到底层渲染池中
+     * @param context 应用上下文对象
+     */
     @JvmStatic
     fun init(context: Context) {
         if (libVLC == null) {
             libVLC = LibVLC(context.applicationContext, vlcArgs)
-            // 将 LibVLC 实例传给渲染池，剩下的全交给底层 DecoderStream 去做
             VlcRenderPool.setLibVLC(libVLC!!)
         }
     }
 
+    /**
+     * 设置渲染引擎允许同时解析的最大视频流数量超出此限制的新流将被直接拒绝
+     * @param maxCount 允许并发解析的最大流数量
+     */
+    @JvmStatic
+    fun setMaxStreamCount(maxCount: Int) {
+        VlcRenderPool.setMaxStreamCount(maxCount)
+    }
+
+    /**
+     * 将指定的视频流地址绑定到外部传入的显示画布上进行渲染
+     * @param url 目标视频流的网络地址
+     * @param x5Surface 外部组件提供的目标渲染画布
+     * @param width 画布的初始物理宽度
+     * @param height 画布的初始物理高度
+     */
     @JvmStatic
     @Synchronized
-    fun bind(url: String, x5Surface: Surface) {
+    fun bind(url: String, x5Surface: Surface, width: Int, height: Int) {
         if (url.isEmpty() || libVLC == null) return
-        // 只转发指令，不亲自创建 MediaPlayer
-        VlcRenderPool.bindSurface(url, x5Surface)
+        VlcRenderPool.bindSurface(url, x5Surface, width, height)
     }
 
+    /**
+     * 暂停指定视频流的解码与渲染工作保留内存和表面对象以便后续快速恢复
+     * @param url 需要暂停的目标视频流地址
+     */
     @JvmStatic
-    fun updateSurfaceSize(x5Surface: Surface) {
-        VlcRenderPool.updateSurfaceSize(x5Surface)
+    fun pauseStream(url: String) {
+        VlcRenderPool.pauseStream(url)
     }
 
+    /**
+     * 恢复指定视频流的解码与渲染工作
+     * @param url 需要恢复的目标视频流地址
+     */
+    @JvmStatic
+    fun resumeStream(url: String) {
+        VlcRenderPool.resumeStream(url)
+    }
+
+    /**
+     * 截取指定显示表面上当前渲染的最新一帧画面并转化为安卓位图供界面使用
+     * @param x5Surface 需要提取画面的目标显示表面
+     * @param callback 接收提取位图的异步回调函数若提取失败将返回空值
+     */
+    @JvmStatic
+    fun captureFrame(x5Surface: Surface, callback: (Bitmap?) -> Unit) {
+        VlcRenderPool.captureFrame(x5Surface, callback)
+    }
+
+    /**
+     * 更新指定画布的物理尺寸参数以适配外部组件的大小变化
+     * @param x5Surface 需要更新尺寸的目标画布
+     * @param width 新的物理宽度
+     * @param height 新的物理高度
+     */
+    @JvmStatic
+    fun updateSurfaceSize(x5Surface: Surface, width: Int, height: Int) {
+        VlcRenderPool.updateSurfaceSize(x5Surface, width, height)
+    }
+
+    /**
+     * 解除指定视频流与目标画布的绑定关系停止在该画布上的渲染
+     * @param url 正在播放的视频流地址
+     * @param x5Surface 需要解绑的目标画布
+     */
     @JvmStatic
     @Synchronized
     fun unbind(url: String, x5Surface: Surface) {
         VlcRenderPool.unbindSurface(url, x5Surface)
     }
 
+    /**
+     * 释放所有的渲染资源以及底层的 LibVLC 引擎实例
+     */
     @JvmStatic
     fun releaseAll() {
         VlcRenderPool.releaseAll()
         libVLC?.release()
         libVLC = null
     }
+
 }
