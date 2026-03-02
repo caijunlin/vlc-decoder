@@ -1,4 +1,4 @@
-val versionName = "1.0.0"
+val versionName = "1.0.1"
 
 val jdkVersion = 21
 
