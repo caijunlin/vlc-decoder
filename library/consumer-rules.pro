@@ -15,3 +15,5 @@
     # 保留 onTouchEvent 函数名、参数类型和返回值
     public boolean onTouchEvent(android.view.MotionEvent, int, int);
 }
+
+-dontwarn java.lang.invoke.StringConcatFactory
