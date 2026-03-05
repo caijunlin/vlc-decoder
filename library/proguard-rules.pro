@@ -4,16 +4,16 @@
 # 保留 Kotlin 的元数据，确保高阶函数类型在混淆后不出错
 -keep class kotlin.Metadata { *; }
 
-# 绝对保留 VlcStreamManager 的类名以及内部所有的公开/私有成员和方法
--keep class com.caijunlin.vlcdecoder.core.VlcStreamManager { *; }
+# X5StreamKit的包名和类名以及函数名不混淆 (虽然你加了 @Keep，但写在规则里更稳妥)
+-keep class com.caijunlin.vlcdecoder.X5StreamKit { *; }
 
-# 保留 VideoGestureHelper 类名、构造函数以及指定的 onTouchEvent 方法
--keep class com.caijunlin.vlcdecoder.gesture.VideoGestureHelper {
-    # 保留初始化函数（构造方法），匹配任意参数
-    public <init>(...);
+# JavaScriptBridge的类名和里面的函数名不混淆 (供 JS 调用的桥接类必须防混淆)
+-keep class com.caijunlin.vlcdecoder.debug.JavaScriptBridge { *; }
 
-    # 保留 onTouchEvent 函数名、参数类型和返回值
-    public boolean onTouchEvent(android.view.MotionEvent, int, int);
-}
+# callback包下面的所有类和函数名不混淆
+-keep class com.caijunlin.vlcdecoder.callback.** { *; }
+
+# StreamWebView类名不混淆 (仅保留类名，不要求保留内部函数/变量名，所以用 keepnames)
+-keepnames class com.caijunlin.vlcdecoder.core.StreamWebView
 
 -dontwarn java.lang.invoke.StringConcatFactory

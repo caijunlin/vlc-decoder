@@ -18,6 +18,33 @@ import kotlin.math.abs
  */
 object VlcRenderPool {
 
+    // VLC 引擎的底层缺省初始化参数列表
+    private val defaultVlcArgs = arrayListOf(
+        "--no-audio",
+        "--aout=dummy",
+        "--rtsp-tcp",
+        "--network-caching=300",      // 减少内存在多路并发下的堆积
+        "--drop-late-frames",
+        "--skip-frames",
+        "--avcodec-skiploopfilter=4", // 彻底关闭 H.264/HEVC 的环路滤波！画质仅会损失肉眼难以察觉的 1%，但解码性能直接暴增 30%~50%！
+        "--avcodec-hw=any",           // 强行允许所有形式的硬解加速
+        "--codec=mediacodec,all",
+        "--avcodec-threads=1",        // 限制软解时的并发线程数，防止多路软解互相抢夺CPU导致系统雪崩
+        "--no-stats",                 // 关闭内部的数据统计模块，苍蝇腿也是肉
+        "--no-sub-autodetect-file",
+        "--no-osd",
+        "--no-spu",
+        // 降低丢帧阈值，如果 VLC 内部判断晚了，直接丢弃，不要硬往 OpenGL 送
+        "--drop-late-frames",
+        "--skip-frames"
+    )
+
+    // 单条视频流缺省的媒体控制参数，默认开启循环播放及基础网络缓存
+    private val defaultMediaArgs = arrayListOf(
+        ":network-caching=300",
+        ":input-repeat=65535"
+    )
+
     // 维持底层解码的全局唯一工厂引擎入口
     private var libVLC: LibVLC? = null
 
@@ -39,7 +66,7 @@ object VlcRenderPool {
     private val surfaceRouteMap = ConcurrentHashMap<Surface, String>()
 
     // 初始化全局解析引擎实体并装载缺省底层优化参数
-    fun initLibVLC(context: Context, args: ArrayList<String>) {
+    fun initLibVLC(context: Context, args: ArrayList<String> = defaultVlcArgs) {
         if (libVLC == null) {
             libVLC = LibVLC(context.applicationContext, args)
         }
@@ -61,7 +88,7 @@ object VlcRenderPool {
         x5Surface: Surface,
         width: Int,
         height: Int,
-        mediaOptions: ArrayList<String>
+        mediaOptions: ArrayList<String> = defaultMediaArgs
     ) {
         if (url.isEmpty() || libVLC == null) return
 
@@ -87,7 +114,7 @@ object VlcRenderPool {
         x5Surface: Surface,
         width: Int,
         height: Int,
-        mediaOptions: ArrayList<String>
+        mediaOptions: ArrayList<String> = defaultMediaArgs
     ) {
         if (newUrl.isEmpty() || libVLC == null) return
 

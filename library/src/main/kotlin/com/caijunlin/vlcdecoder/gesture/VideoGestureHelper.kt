@@ -6,7 +6,7 @@ import android.view.MotionEvent
 import android.view.Surface
 import android.view.View
 import androidx.core.graphics.scale
-import com.caijunlin.vlcdecoder.core.VlcStreamManager
+import com.caijunlin.vlcdecoder.gles.VlcRenderPool
 
 /**
  * @author caijunlin
@@ -34,7 +34,7 @@ class VideoGestureHelper(
             val touchOffsetY = event.y
             val surface = surfaceProvider()
             if (surface != null && surface.isValid) {
-                VlcStreamManager.captureFrame(surface) { bitmap ->
+                VlcRenderPool.captureFrame(surface) { bitmap ->
                     if (bitmap != null) {
                         startNativeDrag(bitmap, touchOffsetX, touchOffsetY, width, height)
                     }

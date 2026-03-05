@@ -453,8 +453,8 @@ class EglCore {
      * 向系统屏幕合成器 (SurfaceFlinger) 提交画面的真实硬件时间戳 (PTS)。
      * 它可以彻底消除 30fps 视频在 60Hz 屏幕上由于帧停留不均导致的持续性规律跳帧 (Judder)！
      */
-    fun setPresentationTime(eglSurface: EGLSurface, nst: Long) {
-        EGLExt.eglPresentationTimeANDROID(eglDisplay, eglSurface, nst)
+    fun setPresentationTime(eglSurface: EGLSurface, n: Long) {
+        EGLExt.eglPresentationTimeANDROID(eglDisplay, eglSurface, n)
     }
 
     /**
