@@ -5,7 +5,7 @@
 -keep class kotlin.Metadata { *; }
 
 # X5StreamKit的包名和类名以及函数名不混淆 (虽然你加了 @Keep，但写在规则里更稳妥)
--keep class com.caijunlin.vlcdecoder.X5StreamKit { *; }
+-keep class com.caijunlin.vlcdecoder.StreamKit { *; }
 
 # JavaScriptBridge的类名和里面的函数名不混淆 (供 JS 调用的桥接类必须防混淆)
 -keep class com.caijunlin.vlcdecoder.debug.JavaScriptBridge { *; }

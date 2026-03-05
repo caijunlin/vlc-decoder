@@ -13,7 +13,7 @@ import com.caijunlin.vlcdecoder.widget.WidgetManager
  * @date   : 2026/3/5
  * @description   : 对外暴露的函数
  */
-object X5StreamKit {
+object StreamKit {
 
     /**
      * 初始化
