@@ -3,7 +3,7 @@ package com.caijunlin.vlcdecoder.widget
 import android.util.Log
 import com.tencent.smtt.sdk.WebView
 import org.json.JSONObject
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * VLCVideoWidget 统一管理工具类
@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object WidgetManager {
 
-    private val widgetCache = ConcurrentHashMap<String, VLCVideoSurface>()
+    private val widgetCache = CopyOnWriteArrayList<VLCVideoSurface>()
 
     /**
      * 缓存 Widget
@@ -20,14 +20,13 @@ object WidgetManager {
      * @param widget 创建出来的 VLCVideoWidget 实例
      */
     fun cacheWidget(id: String?, widget: VLCVideoSurface) {
-        id.let {
-            if (it == null || it.isEmpty()) {
-                Log.e("VLCDecoder", "Cannot cache widget: id is empty!")
-                return
-            }
-            widgetCache[it] = widget
-            Log.d("VLCDecoder", "Cached widget with id: $id. Total widgets: ${widgetCache.size}")
+        if (id.isNullOrEmpty()) {
+            Log.e("VLCDecoder", "Cannot cache widget: id is empty!")
+            return
         }
+        widgetCache.removeAll { it.id == id }
+        widgetCache.add(widget)
+        Log.d("VLCDecoder", "Cached widget with id: $id. Total widgets: ${widgetCache.size}")
     }
 
     /**
@@ -36,14 +35,14 @@ object WidgetManager {
      * @param id 需要移除的标签的唯一标识
      */
     fun removeWidget(id: String?) {
-        id?.let {
-            val removed = widgetCache.remove(it)
-            if (removed != null) {
-                Log.d(
-                    "VLCDecoder",
-                    "Removed widget with id: $it. Remaining widgets: ${widgetCache.size}"
-                )
-            }
+        if (id.isNullOrEmpty()) return
+
+        val removed = widgetCache.removeAll { it.id == id }
+        if (removed) {
+            Log.d(
+                "VLCDecoder",
+                "Removed widget with id: $id. Remaining widgets: ${widgetCache.size}"
+            )
         }
     }
 
@@ -58,42 +57,35 @@ object WidgetManager {
     /**
      * 通过 x, y 获取最顶层的 VLCVideoWidget
      * @param webView 承载的 X5 WebView
-     * @param touchX Android 触摸事件的物理 X 坐标
-     * @param touchY Android 触摸事件的物理 Y 坐标
+     * @param x Android 触摸事件的物理 X 坐标
+     * @param y Android 触摸事件的物理 Y 坐标
      * @param callback 异步回调，返回命中的 VLCVideoWidget，若未命中或被遮挡则返回 null
      */
     fun getWidgetAt(
         webView: WebView,
         tagName: String,
-        touchX: Float,
-        touchY: Float,
+        x: Float,
+        y: Float,
         callback: (VLCVideoSurface?) -> Unit
     ) {
-        // 将 Android 物理像素转换为 Web 的 CSS 像素
-        val density = webView.context.resources.displayMetrics.density
-        val cssX = touchX / density
-        val cssY = touchY / density
-        // 构建 JS 脚本：寻找指定坐标最顶层的标签并返回其 id
         val jsCode = """
             (function(x, y) {
-                var el = document.elementFromPoint(x, y);
-                while(el && el !== document.body) {
-                    if (el.tagName.toLowerCase() === '$tagName') {
-                        return el.id; 
+                var element = document.elementFromPoint(x, y);
+                while(element && element !== document.body) {
+                    if (element.tagName.toLowerCase() === '$tagName') {
+                        return element.id; 
                     }
-                    el = el.parentElement;
+                    element = element.parentElement;
                 }
                 return null;
-            })($cssX, $cssY);
+            })($x, $y);
         """.trimIndent()
         Log.d("VLCDecoder", "JS Code: $jsCode")
-        // 在 WebView 中执行 JS 探针
         webView.evaluateJavascript(jsCode) { result ->
+            Log.d("VLCDecoder", "JS Result: $result")
             if (!result.isNullOrEmpty() && result != "null") {
-                // 去除 evaluateJavascript 返回值可能自带的双引号
                 val videId = result.replace("\"", "")
-                // 从缓存中匹配并回调
-                val targetWidget = widgetCache[videId]
+                val targetWidget = widgetCache.find { it.id == videId }
                 callback(targetWidget)
             } else {
                 callback(null)
@@ -103,10 +95,6 @@ object WidgetManager {
 
     /**
      * 基础函数：向指定 ID 的 DOM 元素派发 CustomEvent 自定义事件
-     * @param webView 承载的 X5 WebView
-     * @param elementId HTML 标签的 id
-     * @param eventName 自定义事件的名称 (如 "remove-source", "set-video-source")
-     * @param detailData 传递给 CustomEvent.detail 的数据对象 (JS 字符串形式，如 "{}" 或 "{ videoData: '...' }")
      */
     private fun dispatchCustomEvent(
         webView: WebView,
@@ -115,7 +103,6 @@ object WidgetManager {
         detailData: String = "null",
         onComplete: ((Boolean) -> Unit)? = null
     ) {
-        // 构建注入的 JS 代码，创建并触发 CustomEvent
         val jsCode = """
             (function() {
                 var element = document.getElementById('$elementId');
@@ -130,12 +117,10 @@ object WidgetManager {
             })();
         """.trimIndent()
         Log.d("VLCDecoder", "JS Code: $jsCode")
-        // 在 UI 线程执行 JS
-        webView.post {
-            webView.evaluateJavascript(jsCode) { result ->
-                val isSuccess = result?.replace("\"", "")?.replace("'", "") == "true"
-                onComplete?.invoke(isSuccess)
-            }
+        webView.evaluateJavascript(jsCode) { result ->
+            Log.d("VLCDecoder", "JS Result: $result")
+            val isSuccess = result?.replace("\"", "")?.replace("'", "") == "true"
+            onComplete?.invoke(isSuccess)
         }
     }
 
@@ -155,8 +140,6 @@ object WidgetManager {
 
     /**
      * 触发带参数的 set-video-source 事件
-     * 根据图3的前端逻辑，前端通过 const data = e.detail; const videoData = JSON.parse(data.videoData) 解析
-     * 所以这里传递的 detail 必须包含 videoData 字段，并且它的值是一个 JSON 字符串
      */
     fun triggerSetVideoSource(webView: WebView, elementId: String, videoData: String) {
         val safeVideoData = JSONObject.quote(videoData)
@@ -165,4 +148,51 @@ object WidgetManager {
         Log.i("VLCDecoder", "Triggered set-video-source on $elementId with data")
     }
 
+    /**
+     * 通过 id 获取标签的真实宽高，并计算拖拽滑动的缩放比
+     */
+    fun getBoundingClientRect(
+        webView: WebView,
+        elementId: String,
+        callback: (Int, Int, Float, Float) -> Unit
+    ) {
+        val jsCode = """
+        (function() {
+            var element = document.getElementById('$elementId');
+            if (element) {
+                var rect = element.getBoundingClientRect();
+                return JSON.stringify({
+                    width: rect.width,
+                    height: rect.height,
+                    offsetW: element.offsetWidth || 1,
+                    offsetH: element.offsetHeight || 1
+                });
+            }
+            return null;
+        })();
+        """.trimIndent()
+        webView.evaluateJavascript(jsCode) { result ->
+            try {
+                val rectStr = result.removeSurrounding("\"").replace("\\\"", "\"")
+                val rect = JSONObject(rectStr)
+
+                val physicalWidth = rect.optDouble("width", 0.0).toInt()
+                val physicalHeight = rect.optDouble("height", 0.0).toInt()
+                val offsetW = rect.optDouble("offsetW", 1.0).toFloat()
+                val offsetH = rect.optDouble("offsetH", 1.0).toFloat()
+
+                val webScaleX = physicalWidth / offsetW
+                val webScaleY = physicalHeight / offsetH
+
+                val density = webView.context.resources.displayMetrics.density
+                val touchScaleX = if (webScaleX > 0) density / webScaleX else 1f
+                val touchScaleY = if (webScaleY > 0) density / webScaleY else 1f
+
+                callback(physicalWidth, physicalHeight, touchScaleX, touchScaleY)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                callback(0, 0, 1f, 1f)
+            }
+        }
+    }
 }

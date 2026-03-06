@@ -113,7 +113,6 @@ class StreamWebView @JvmOverloads constructor(
     ): IEmbeddedWidgetClient? {
         return when (tagName.lowercase()) {
             tag -> VLCVideoSurface(
-                context,
                 this, // 直接将当前 WebView 实例传给 Widget
                 tag,
                 attributes,

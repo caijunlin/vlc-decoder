@@ -7,6 +7,8 @@ import android.view.Surface
 import android.view.View
 import androidx.core.graphics.scale
 import com.caijunlin.vlcdecoder.gles.VlcRenderPool
+import com.caijunlin.vlcdecoder.widget.WidgetManager
+import com.tencent.smtt.sdk.WebView
 
 /**
  * @author caijunlin
@@ -16,32 +18,62 @@ import com.caijunlin.vlcdecoder.gles.VlcRenderPool
 class VideoGestureHelper(
     private val surfaceProvider: () -> Surface?,
     private val dragHostView: View,
-    private val onDropAction: (centerX: Float, centerY: Float) -> Unit
+    private val onDropAction: (centerX: Float, centerY: Float, width: Int, height: Int) -> Unit
 ) {
 
+    var isDragInProgress: Boolean = false
+
     private class DragSessionState(
-        val touchOffsetX: Float,
-        val touchOffsetY: Float,
         val width: Int,
         val height: Int,
+        val touchOffsetX: Float,
+        val touchOffsetY: Float,
         var lastVisualX: Float,
         var lastVisualY: Float
     )
 
-    fun onTouchEvent(event: MotionEvent, width: Int, height: Int): Boolean {
+    fun onTouchEvent(
+        event: MotionEvent,
+        webView: WebView,
+        elementId: String
+    ) {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-            val touchOffsetX = event.x
-            val touchOffsetY = event.y
-            val surface = surfaceProvider()
-            if (surface != null && surface.isValid) {
-                VlcRenderPool.captureFrame(surface) { bitmap ->
-                    if (bitmap != null) {
-                        startNativeDrag(bitmap, touchOffsetX, touchOffsetY, width, height)
+            if (isDragInProgress) return
+            isDragInProgress = true
+            val downX = event.x
+            val downY = event.y
+            WidgetManager.getBoundingClientRect(
+                webView,
+                elementId
+            ) { physicalW, physicalH, scaleX, scaleY ->
+                if (physicalW == 0 && physicalH == 0) {
+                    isDragInProgress = false
+                    return@getBoundingClientRect
+                }
+
+                val touchX = downX / scaleX
+                val touchY = downY / scaleY
+
+                val surface = surfaceProvider()
+                if (surface != null && surface.isValid) {
+                    VlcRenderPool.captureFrame(surface) { bitmap ->
+                        if (bitmap != null) {
+                            startNativeDrag(
+                                bitmap,
+                                touchX,
+                                touchY,
+                                physicalW,
+                                physicalH
+                            )
+                        } else {
+                            isDragInProgress = false
+                        }
                     }
+                } else {
+                    isDragInProgress = false
                 }
             }
         }
-        return true
     }
 
     private fun startNativeDrag(
@@ -55,21 +87,24 @@ class VideoGestureHelper(
         bitmap.recycle()
         val shadowBuilder = BitmapDragShadowBuilder(scaledBitmap, touchX.toInt(), touchY.toInt())
         val sessionState = DragSessionState(
-            touchOffsetX = touchX,
-            touchOffsetY = touchY,
             width = width,
             height = height,
+            touchOffsetX = touchX,
+            touchOffsetY = touchY,
             lastVisualX = touchX,
             lastVisualY = touchY
         )
         dragHostView.post {
             setupDragListener()
-            dragHostView.startDragAndDrop(
+            val started = dragHostView.startDragAndDrop(
                 null,
                 shadowBuilder,
                 sessionState,
                 View.DRAG_FLAG_GLOBAL
             )
+            if (!started) {
+                isDragInProgress = false
+            }
         }
     }
 
@@ -77,10 +112,7 @@ class VideoGestureHelper(
         dragHostView.setOnDragListener { view, event ->
             val state = event.localState as? DragSessionState ?: return@setOnDragListener false
             when (event.action) {
-                DragEvent.ACTION_DRAG_STARTED -> {
-                    true
-                }
-
+                DragEvent.ACTION_DRAG_STARTED -> true
                 DragEvent.ACTION_DRAG_LOCATION -> {
                     state.lastVisualX = event.x
                     state.lastVisualY = event.y
@@ -94,12 +126,13 @@ class VideoGestureHelper(
                     val imgTopLeftY = finalY - state.touchOffsetY
                     val centerX = imgTopLeftX + (state.width / 2f)
                     val centerY = imgTopLeftY + (state.height / 2f)
-                    onDropAction(centerX, centerY)
+                    onDropAction(centerX, centerY, state.width, state.height)
                     true
                 }
 
                 DragEvent.ACTION_DRAG_ENDED -> {
                     view.setOnDragListener(null)
+                    isDragInProgress = false
                     true
                 }
 

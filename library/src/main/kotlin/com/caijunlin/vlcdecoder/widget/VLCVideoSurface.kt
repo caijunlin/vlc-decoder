@@ -1,6 +1,5 @@
 package com.caijunlin.vlcdecoder.widget
 
-import android.app.Activity
 import android.content.Context
 import android.graphics.Rect
 import android.util.DisplayMetrics
@@ -20,7 +19,6 @@ import kotlin.math.ceil
  * @description   腾讯X5内核同层渲染组件运用即时绑定的策略实现可见性与硬件解码器生命周期的强绑定
  */
 class VLCVideoSurface(
-    var context: Context,
     var webView: WebView,
     private val tagName: String,
     attributes: Map<String, String>,
@@ -28,7 +26,7 @@ class VLCVideoSurface(
 ) : IEmbeddedWidgetClient {
 
     private var _attributes = attributes.toMutableMap()
-    private val id: String
+    val id: String
         get() = _attributes["id"] ?: ""
     private val videoSrc: String
         get() = _attributes["src"] ?: ""
@@ -37,17 +35,16 @@ class VLCVideoSurface(
     private val videoData: String
         get() = _attributes["videoData".lowercase()] ?: ""
 
-    private var x: Int = 0
-    private var y: Int = 0
-    private var width: Int = 0
-    private var height: Int = 0
+    private var rect: Rect? = null
+    private var surfaceWidth: Int = 0
+    private var surfaceHeight: Int = 0
     private var x5Surface: Surface? = null
     private var gestureHelper: VideoGestureHelper? = null
 
     private fun bind(surface: Surface?) {
         if (surface != null && surface.isValid) {
             if (videoSrc.isNotEmpty()) {
-                VlcRenderPool.bindSurface(videoSrc, surface, width, height)
+                VlcRenderPool.bindSurface(videoSrc, surface, surfaceWidth, surfaceHeight)
             } else {
                 VlcRenderPool.clearSurface(surface)
             }
@@ -62,27 +59,20 @@ class VLCVideoSurface(
         if (gestureHelper == null) {
             gestureHelper = VideoGestureHelper(
                 surfaceProvider = { x5Surface },
-                dragHostView = (context as Activity).window.decorView,
-                onDropAction = { x, y ->
-                    val webViewRect = Rect(
-                        0,
-                        0,
-                        webView.width,
-                        webView.height
-                    )
-                    Log.i("VLCDecoder", "onDropAction $x $y $webViewRect $id $videoType")
-                    if (webViewRect.contains(x.toInt(), y.toInt())) {
+                dragHostView = webView,
+                onDropAction = { centerX, centerY, width, height ->
+                    // webViewRect浏览器的物理宽高、x,y设备的物理坐标
+                    val webViewRect = Rect(0, 0, webView.width, webView.height)
+                    if (webViewRect.contains(centerX.toInt(), centerY.toInt())) {
                         when (videoType) {
                             "source" -> {
-                                // 当前是一个源将url传递出去
                                 WidgetManager.getWidgetAt(
                                     webView,
                                     tagName,
-                                    x,
-                                    y
+                                    centerX,
+                                    centerY
                                 ) { hitWidget ->
                                     if (hitWidget != null && hitWidget.videoType == "player") {
-                                        Log.i("VLCDecoder", "onDropAction hit ${hitWidget.id}")
                                         WidgetManager.triggerSetVideoSource(
                                             webView = webView,
                                             elementId = hitWidget.id,
@@ -93,20 +83,18 @@ class VLCVideoSurface(
                             }
 
                             "player" -> {
-                                // 查看是否可以移除当前模块
-                                val rect = Rect(
-                                    this.x,
-                                    this.y,
-                                    this.x + this.width,
-                                    this.y + this.height
+                                val jsRect = Rect(
+                                    rect?.left ?: 0,
+                                    rect?.top ?: 0,
+                                    (rect?.left ?: 0) + width,
+                                    (rect?.top ?: 0) + height
                                 )
-                                if (!rect.contains(x.toInt(), y.toInt())) {
+                                if (!jsRect.contains(centerX.toInt(), centerY.toInt())) {
                                     // 移除当前源数据
                                     WidgetManager.triggerRemoveSource(
                                         webView,
                                         this@VLCVideoSurface.id
                                     ) {
-                                        // 完全清空画布
                                     }
                                 }
                             }
@@ -127,17 +115,9 @@ class VLCVideoSurface(
     }
 
     override fun onTouchEvent(event: MotionEvent?): Boolean {
-        Log.i("VLCDecoder", "onTouchEvent $id")
-        if (event != null) {
-            // 有url的模块才能拖拽
-            if (videoSrc != "") {
-                return gestureHelper.let {
-                    it?.onTouchEvent(
-                        event,
-                        width,
-                        height
-                    ) ?: true
-                }
+        if (event != null && videoSrc != "") {
+            webView.post {
+                gestureHelper?.onTouchEvent(event, webView, id)
             }
         }
         return true
@@ -155,16 +135,16 @@ class VLCVideoSurface(
 
     override fun onRectChanged(rect: Rect?) {
         if (rect == null) return
-        this.x = dip2px(rect.left.toFloat())
-        this.y = dip2px(rect.top.toFloat())
+        // 浏览器回调的位置这个位置的left和right值是相对于设备的绝对定位，宽高则有相应的缩放
+        this.rect = rect
         val physicalW = dip2px(rect.width().toFloat())
         val physicalH = dip2px(rect.height().toFloat())
-        if (physicalW != width || physicalH != height) {
-            width = physicalW
-            height = physicalH
+        if (physicalW != surfaceWidth || physicalH != surfaceHeight) {
+            surfaceWidth = physicalW
+            surfaceHeight = physicalH
             x5Surface?.let { surface ->
                 if (surface.isValid) {
-                    VlcRenderPool.resizeSurface(surface, width, height)
+                    VlcRenderPool.resizeSurface(surface, surfaceWidth, surfaceHeight)
                 }
             }
         }
@@ -172,13 +152,11 @@ class VLCVideoSurface(
 
     override fun onActive() {
         Log.i("VLCDecoder", "onActive $id")
-        // 重新进入活跃区直接要求绑定即可如无解码器底层会自动拉起
         x5Surface?.let { bind(it) }
     }
 
     override fun onDeactive() {
         Log.i("VLCDecoder", "onDeactivate $id")
-        // 退出活跃区立刻解绑释放资源交由底层裁决销毁
         x5Surface?.let { VlcRenderPool.unbindSurface(videoSrc, it) }
     }
 
@@ -197,13 +175,10 @@ class VLCVideoSurface(
             x5Surface?.let { surface ->
                 if (surface.isValid) {
                     if (oldSrc.isNotEmpty() && p1.isNotEmpty()) {
-                        // 使用全新的安全交接 API 切换视频流
-                        VlcRenderPool.switchUrl(oldSrc, p1, surface, width, height)
+                        VlcRenderPool.switchUrl(oldSrc, p1, surface, surfaceWidth, surfaceHeight)
                     } else if (p1.isNotEmpty()) {
-                        // 从无到有
                         bind(surface)
                     } else if (oldSrc.isNotEmpty()) {
-                        // 从有到无
                         VlcRenderPool.unbindSurface(oldSrc, surface)
                     }
                 }
@@ -216,10 +191,8 @@ class VLCVideoSurface(
         Log.i("VLCDecoder", "onVisibilityChanged $v $id")
         x5Surface?.let {
             if (v) {
-                // 重新显示时执行绑定
                 bind(it)
             } else {
-                // 隐藏时执行彻解绑销毁
                 VlcRenderPool.unbindSurface(videoSrc, it)
             }
         }
