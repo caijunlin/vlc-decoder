@@ -144,7 +144,7 @@ object KernelManager {
      * 抽取公共的 授权与初始化逻辑
      */
     private fun doAuthAndInit(application: Application) {
-        TbsFramework.authenticateX5(true, object : IAuthRequestCallback {
+        TbsFramework.authenticateX5(false, object : IAuthRequestCallback {
             override fun onResponse(license: String?) {
                 QbSdk.preInit(application, object : QbSdk.PreInitCallback {
                     override fun onCoreInitFinished() {

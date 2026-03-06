@@ -37,7 +37,6 @@ class VLCVideoSurface(
     private val videoData: String
         get() = _attributes["videoData".lowercase()] ?: ""
 
-    private var rect: Rect? = null
     private var x: Int = 0
     private var y: Int = 0
     private var width: Int = 0
@@ -135,8 +134,8 @@ class VLCVideoSurface(
                 return gestureHelper.let {
                     it?.onTouchEvent(
                         event,
-                        rect?.width() ?: 640,
-                        rect?.height() ?: 480
+                        width,
+                        height
                     ) ?: true
                 }
             }
@@ -156,7 +155,6 @@ class VLCVideoSurface(
 
     override fun onRectChanged(rect: Rect?) {
         if (rect == null) return
-        this.rect = rect
         this.x = dip2px(rect.left.toFloat())
         this.y = dip2px(rect.top.toFloat())
         val physicalW = dip2px(rect.width().toFloat())
