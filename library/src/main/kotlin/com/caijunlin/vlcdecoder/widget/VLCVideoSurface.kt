@@ -1,6 +1,5 @@
 package com.caijunlin.vlcdecoder.widget
 
-import android.content.Context
 import android.graphics.Rect
 import android.util.DisplayMetrics
 import android.util.Log
