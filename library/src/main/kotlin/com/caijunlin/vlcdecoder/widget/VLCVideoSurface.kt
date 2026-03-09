@@ -6,10 +6,10 @@ import android.util.Log
 import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.Surface
+import com.caijunlin.vlcdecoder.core.StreamWebView
 import com.caijunlin.vlcdecoder.gesture.VideoGestureHelper
-import com.caijunlin.vlcdecoder.gles.VlcRenderPool
+import com.caijunlin.vlcdecoder.gles.VLCRenderPool
 import com.tencent.smtt.export.external.embeddedwidget.interfaces.IEmbeddedWidgetClient
-import com.tencent.smtt.sdk.WebView
 import kotlin.math.ceil
 
 /**
@@ -18,7 +18,7 @@ import kotlin.math.ceil
  * @description   腾讯X5内核同层渲染组件运用即时绑定的策略实现可见性与硬件解码器生命周期的强绑定
  */
 class VLCVideoSurface(
-    var webView: WebView,
+    var webView: StreamWebView,
     private val tagName: String,
     attributes: Map<String, String>,
     private val displayMetrics: DisplayMetrics
@@ -43,9 +43,9 @@ class VLCVideoSurface(
     private fun bind(surface: Surface?) {
         if (surface != null && surface.isValid) {
             if (videoSrc.isNotEmpty()) {
-                VlcRenderPool.bindSurface(videoSrc, surface, surfaceWidth, surfaceHeight)
+                VLCRenderPool.bindSurface(videoSrc, surface, surfaceWidth, surfaceHeight)
             } else {
-                VlcRenderPool.clearSurface(surface)
+                VLCRenderPool.clearSurface(surface)
             }
         }
     }
@@ -108,7 +108,7 @@ class VLCVideoSurface(
     override fun onSurfaceDestroyed(surface: Surface?) {
         Log.i("VLCDecoder", "onSurfaceDestroyed $id")
         if (surface == null) return
-        VlcRenderPool.unbindSurface(videoSrc, surface)
+        VLCRenderPool.unbindSurface(videoSrc, surface)
         x5Surface = null
         WidgetManager.removeWidget(this.id)
     }
@@ -143,7 +143,7 @@ class VLCVideoSurface(
             surfaceHeight = physicalH
             x5Surface?.let { surface ->
                 if (surface.isValid) {
-                    VlcRenderPool.resizeSurface(surface, surfaceWidth, surfaceHeight)
+                    VLCRenderPool.resizeSurface(surface, surfaceWidth, surfaceHeight)
                 }
             }
         }
@@ -156,7 +156,7 @@ class VLCVideoSurface(
 
     override fun onDeactive() {
         Log.i("VLCDecoder", "onDeactivate $id")
-        x5Surface?.let { VlcRenderPool.unbindSurface(videoSrc, it) }
+        x5Surface?.let { VLCRenderPool.unbindSurface(videoSrc, it) }
     }
 
     override fun onDestroy() {
@@ -174,11 +174,11 @@ class VLCVideoSurface(
             x5Surface?.let { surface ->
                 if (surface.isValid) {
                     if (oldSrc.isNotEmpty() && p1.isNotEmpty()) {
-                        VlcRenderPool.switchUrl(oldSrc, p1, surface, surfaceWidth, surfaceHeight)
+                        VLCRenderPool.switchUrl(oldSrc, p1, surface, surfaceWidth, surfaceHeight)
                     } else if (p1.isNotEmpty()) {
                         bind(surface)
                     } else if (oldSrc.isNotEmpty()) {
-                        VlcRenderPool.unbindSurface(oldSrc, surface)
+                        VLCRenderPool.unbindSurface(oldSrc, surface)
                     }
                 }
             }
@@ -192,7 +192,7 @@ class VLCVideoSurface(
             if (v) {
                 bind(it)
             } else {
-                VlcRenderPool.unbindSurface(videoSrc, it)
+                VLCRenderPool.unbindSurface(videoSrc, it)
             }
         }
     }

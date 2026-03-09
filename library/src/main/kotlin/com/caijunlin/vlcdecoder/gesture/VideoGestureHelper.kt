@@ -6,9 +6,9 @@ import android.view.MotionEvent
 import android.view.Surface
 import android.view.View
 import androidx.core.graphics.scale
-import com.caijunlin.vlcdecoder.gles.VlcRenderPool
+import com.caijunlin.vlcdecoder.core.StreamWebView
+import com.caijunlin.vlcdecoder.gles.VLCRenderPool
 import com.caijunlin.vlcdecoder.widget.WidgetManager
-import com.tencent.smtt.sdk.WebView
 
 /**
  * @author caijunlin
@@ -34,7 +34,7 @@ class VideoGestureHelper(
 
     fun onTouchEvent(
         event: MotionEvent,
-        webView: WebView,
+        webView: StreamWebView,
         elementId: String
     ) {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
@@ -56,7 +56,7 @@ class VideoGestureHelper(
 
                 val surface = surfaceProvider()
                 if (surface != null && surface.isValid) {
-                    VlcRenderPool.captureFrame(surface) { bitmap ->
+                    VLCRenderPool.captureFrame(surface) { bitmap ->
                         if (bitmap != null) {
                             startNativeDrag(
                                 bitmap,

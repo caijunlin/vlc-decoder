@@ -7,7 +7,7 @@ package com.caijunlin.vlcdecoder.callback
  */
 abstract class KernelInitCallback {
 
-    abstract fun onSuccess(isX5Core: Boolean)
+    abstract fun onSuccess(success: Boolean)
 
     abstract fun onFailed(code: Int, msg: String?)
 

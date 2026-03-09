@@ -1,12 +1,11 @@
 package com.caijunlin.vlcdecoder.gles
 
-import android.content.Context
 import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.Surface
-import org.videolan.libvlc.LibVLC
+import com.caijunlin.vlcdecoder.core.VLCEngineManager
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
@@ -16,37 +15,13 @@ import kotlin.math.abs
  * @description   极速多线程核心调度池作为全局对外唯一的应用接口门面。
  * 通过内部路由算法将高强度的渲染压力均匀分发至底层的多个私有渲染节点
  */
-object VlcRenderPool {
-
-    // VLC 引擎的底层缺省初始化参数列表
-    private val defaultVlcArgs = arrayListOf(
-        "--no-audio",
-        "--aout=dummy",
-        "--rtsp-tcp",
-        "--network-caching=300",      // 减少内存在多路并发下的堆积
-        "--drop-late-frames",
-        "--skip-frames",
-        "--avcodec-skiploopfilter=4", // 彻底关闭 H.264/HEVC 的环路滤波！画质仅会损失肉眼难以察觉的 1%，但解码性能直接暴增 30%~50%！
-        "--avcodec-hw=any",           // 强行允许所有形式的硬解加速
-        "--codec=mediacodec,all",
-        "--avcodec-threads=1",        // 限制软解时的并发线程数，防止多路软解互相抢夺CPU导致系统雪崩
-        "--no-stats",                 // 关闭内部的数据统计模块，苍蝇腿也是肉
-        "--no-sub-autodetect-file",
-        "--no-osd",
-        "--no-spu",
-        // 降低丢帧阈值，如果 VLC 内部判断晚了，直接丢弃，不要硬往 OpenGL 送
-        "--drop-late-frames",
-        "--skip-frames"
-    )
+object VLCRenderPool {
 
     // 单条视频流缺省的媒体控制参数，默认开启循环播放及基础网络缓存
     private val defaultMediaArgs = arrayListOf(
         ":network-caching=300",
         ":input-repeat=65535"
     )
-
-    // 维持底层解码的全局唯一工厂引擎入口
-    private var libVLC: LibVLC? = null
 
     // 设定允许并发解析的系统全局最大流数量上限防范榨干算力
     @Volatile
@@ -64,13 +39,6 @@ object VlcRenderPool {
 
     // 全局中枢路由字典记录物理画布被分配到了哪个具体视频流以实现跨线程追踪
     private val surfaceRouteMap = ConcurrentHashMap<Surface, String>()
-
-    // 初始化全局解析引擎实体并装载缺省底层优化参数
-    fun initLibVLC(context: Context, args: ArrayList<String> = defaultVlcArgs) {
-        if (libVLC == null) {
-            libVLC = LibVLC(context.applicationContext, args)
-        }
-    }
 
     // 动态下达修改并发阈值的指令更新安全限制
     fun setMaxStreamCount(maxCount: Int) {
@@ -90,13 +58,13 @@ object VlcRenderPool {
         height: Int,
         mediaOptions: ArrayList<String> = defaultMediaArgs
     ) {
-        if (url.isEmpty() || libVLC == null) return
+        if (url.isEmpty() || VLCEngineManager.libVLC == null) return
 
         // 登写入全局路由册并寻址目标线程
         surfaceRouteMap[x5Surface] = url
         val node = getNodeByUrl(url)
         node.handler.post {
-            node.handleBind(url, x5Surface, width, height, mediaOptions, libVLC, maxStreamLimit)
+            node.handleBind(url, x5Surface, width, height, mediaOptions, maxStreamLimit)
         }
     }
 
@@ -116,7 +84,7 @@ object VlcRenderPool {
         height: Int,
         mediaOptions: ArrayList<String> = defaultMediaArgs
     ) {
-        if (newUrl.isEmpty() || libVLC == null) return
+        if (newUrl.isEmpty() || VLCEngineManager.libVLC == null) return
 
         // 第一时间更新中枢路由表保证后续诸如尺寸改变等操作去往崭新节点
         surfaceRouteMap[x5Surface] = newUrl
@@ -135,7 +103,6 @@ object VlcRenderPool {
                         width,
                         height,
                         mediaOptions,
-                        libVLC,
                         maxStreamLimit
                     )
                 }
@@ -150,7 +117,6 @@ object VlcRenderPool {
                     width,
                     height,
                     mediaOptions,
-                    libVLC,
                     maxStreamLimit
                 )
             }
@@ -163,7 +129,6 @@ object VlcRenderPool {
                     width,
                     height,
                     mediaOptions,
-                    libVLC,
                     maxStreamLimit
                 )
             }
@@ -211,12 +176,11 @@ object VlcRenderPool {
     }
 
     // 终极清理指令排空路由矩阵并通知麾下全员自毁
-    fun releaseAll() {
+    fun release() {
         surfaceRouteMap.clear()
         renderNodes.forEach { node ->
             node.handler.post { node.releaseAll() }
         }
-        libVLC?.release()
-        libVLC = null
     }
+
 }

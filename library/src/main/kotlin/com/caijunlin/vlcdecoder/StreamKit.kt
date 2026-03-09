@@ -1,10 +1,10 @@
 package com.caijunlin.vlcdecoder
 
-import android.app.Application
 import android.content.Context
 import com.caijunlin.vlcdecoder.callback.KernelInitCallback
 import com.caijunlin.vlcdecoder.core.KernelManager
-import com.caijunlin.vlcdecoder.gles.VlcRenderPool
+import com.caijunlin.vlcdecoder.core.VLCEngineManager
+import com.caijunlin.vlcdecoder.gles.VLCRenderPool
 import com.caijunlin.vlcdecoder.widget.WidgetManager
 
 /**
@@ -15,13 +15,15 @@ import com.caijunlin.vlcdecoder.widget.WidgetManager
 object StreamKit {
 
     /**
-     * 初始化
-     * @param application 应用上下文对象，用于引擎获取系统硬件信息
+     * 初始化X5
+     * @param context 应用上下文对象，用于引擎获取系统硬件信息
      * @param authCode X5浏览器内核授权码
+     * @param needAutoSaveLicense 是否自动缓存授权码到本地，默认为 true
      */
     @JvmStatic
-    fun init(application: Application, authCode: String) {
-        KernelManager.init(application, authCode)
+    fun init(context: Context, authCode: String, needAutoSaveLicense: Boolean = true) {
+        KernelManager.initKernel(context, authCode, needAutoSaveLicense)
+        VLCEngineManager.init(context)
     }
 
     @JvmStatic
@@ -35,7 +37,16 @@ object StreamKit {
      */
     @JvmStatic
     fun setMaxStreamCount(maxCount: Int) {
-        VlcRenderPool.setMaxStreamCount(maxCount)
+        VLCRenderPool.setMaxStreamCount(maxCount)
+    }
+
+    /**
+     * 释放渲染资源、销毁 EGL 环境
+     */
+    @JvmStatic
+    fun releaseRender() {
+        WidgetManager.clearAll()
+        VLCRenderPool.release()
     }
 
     /**
@@ -44,8 +55,8 @@ object StreamKit {
     @JvmStatic
     fun releaseAll(context: Context) {
         KernelManager.release(context)
-        WidgetManager.clearAll()
-        VlcRenderPool.releaseAll()
+        VLCEngineManager.release()
+        releaseRender()
     }
 
 }

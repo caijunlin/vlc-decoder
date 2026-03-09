@@ -75,10 +75,9 @@ class RenderNode(
      * @param w 画布物理宽度
      * @param h 画布物理高度
      * @param opts 针对当前流的自定义播放参数
-     * @param globalVlc 全局 VLC 底层引擎工厂实例
      * @param limit 当前节点允许管控的最大视频流数量上限
      */
-    fun handleBind(url: String, x5Surface: Surface, w: Int, h: Int, opts: ArrayList<String>, globalVlc: LibVLC?, limit: Int) {
+    fun handleBind(url: String, x5Surface: Surface, w: Int, h: Int, opts: ArrayList<String>, limit: Int) {
         // 避免重复绑定同一个画布
         if (displayMap.containsKey(x5Surface)) return
 
@@ -89,7 +88,7 @@ class RenderNode(
         if (stream == null) {
             // 节点内并发软限制保护
             if (streams.size >= limit) return
-            stream = DecoderStream(url, eglCore, globalVlc, handler, opts) { deadUrl ->
+            stream = DecoderStream(url, eglCore, handler, opts) { deadUrl ->
                 handleStreamDead(deadUrl)
             }
             stream.start()

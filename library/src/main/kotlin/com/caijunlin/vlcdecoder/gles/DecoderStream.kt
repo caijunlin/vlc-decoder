@@ -5,6 +5,7 @@ import android.os.Handler
 import android.util.Log
 import android.view.Surface
 import androidx.core.net.toUri
+import com.caijunlin.vlcdecoder.core.VLCEngineManager
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
@@ -16,7 +17,6 @@ import java.util.concurrent.CopyOnWriteArrayList
  * @description   单个视频流的解码核心封装类。负责维护单路 VLC 播放器实例、管理内部 OES 纹理、生命周期监控，并利用高阶函数向外部反馈异常熔断事件。
  * @param url 绑定的目标视频网络地址
  * @param eglCore 底层图形渲染引擎核心实例，用于生成纹理
- * @param libVLC VLC 引擎底层工厂实例
  * @param renderHandler 渲染主线程的通讯管道
  * @param mediaOptions 外围透传的个性化媒体装载参数
  * @param onStreamDead 当流经历多次重试依然失败时，向渲染池呼救的闭包回调
@@ -24,7 +24,6 @@ import java.util.concurrent.CopyOnWriteArrayList
 class DecoderStream(
     val url: String,
     private val eglCore: EglCore,
-    private val libVLC: LibVLC?,
     private val renderHandler: Handler,
     private val mediaOptions: ArrayList<String>,
     private val onStreamDead: (String) -> Unit
@@ -125,7 +124,7 @@ class DecoderStream(
         }
         decodeSurface = Surface(surfaceTexture)
 
-        libVLC?.let { vlc ->
+        VLCEngineManager.libVLC?.let { vlc ->
             mediaPlayer = MediaPlayer(vlc)
             val media = createMedia(vlc)
             mediaPlayer?.media = media
@@ -181,7 +180,7 @@ class DecoderStream(
      */
     private fun retryPlay() {
         mediaPlayer?.stop()
-        libVLC?.let { vlc ->
+        VLCEngineManager.libVLC?.let { vlc ->
             val media = createMedia(vlc)
             mediaPlayer?.media = media
             media.release() // 再次防漏释放
