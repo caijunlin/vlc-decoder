@@ -89,6 +89,46 @@ class DecoderStream(
     // 生命周期羁绊池：订阅了当前视频流画面的所有外部显示窗口集合，使用并发集合保障线程安全
     val displayWindows = CopyOnWriteArrayList<DisplayWindow>()
 
+    // 记录上一次看门狗巡逻时，画面的真实硬件时间戳 (PTS)
+    @Volatile
+    private var lastWatchdogPts: Long = 0L
+
+    // 记录开始拉流的时间，用于防范“死活不出首帧”的极端情况
+    @Volatile
+    private var startPlayTimeMs: Long = 0L
+
+    // 看门狗轮询任务
+    private val watchdogRunnable = object : Runnable {
+        override fun run() {
+            if (isDecoding) {
+                if (!hasFirstFrame) {
+                    // 首帧死锁
+                    // 还在苦苦等待第一帧画面，给它 15 秒的超长容忍期（应对慢速网络握手或高延迟HLS）
+                    val waitFirstFrameTime = System.currentTimeMillis() - startPlayTimeMs
+                    if (waitFirstFrameTime > 15000L) {
+                        Log.e("VLCDecoder", "Watchdog Bite! 15s timeout waiting for FIRST frame: $url")
+                        retryPlay()
+                        return // 重启后直接打断本次轮询
+                    }
+                } else {
+                    // 中途断流/画面冻结
+                    // 已经出图了，开始比对硬件时间戳。
+                    // 如果现在的 PTS 和 3 秒前巡逻时的 PTS 一模一样，说明彻底卡死（假死）！
+                    if (lastPts != 0L && lastPts == lastWatchdogPts) {
+                        Log.e("VLCDecoder", "Watchdog Bite! Video PTS completely frozen at $lastPts: $url")
+                        retryPlay()
+                        return // 重启后直接打断本次轮询
+                    }
+
+                    // 没有卡死，更新哨兵记录，留作下一次比对
+                    lastWatchdogPts = lastPts
+                }
+            }
+            // 每隔 3 秒巡逻一次（允许视频有 3 秒以内的短暂卡顿缓冲，超过 3 秒没出新帧直接杀）
+            renderHandler.postDelayed(this, 3000L)
+        }
+    }
+
     /**
      * 提取的公用函数：计算并限制视频的安全渲染分辨率。
      * 采用等比缩放算法，不仅限制了最大分辨率，还防止了因单边超限导致的画面拉伸变形。
@@ -140,25 +180,30 @@ class DecoderStream(
                 when (event.type) {
                     MediaPlayer.Event.EndReached -> {
                         isDecoding = false
-                        Log.i("VLCDecoder", "Playback reached end")
+                        Log.i("VLCDecoder", "Playback reached end: $url")
+                        // 配合点播或断流，结束时主动发起重连尝试
+                        retryPlay()
                     }
 
                     MediaPlayer.Event.Playing -> {
                         isDecoding = true
-                        Log.i("VLCDecoder", "Playback started")
+                        Log.i("VLCDecoder", "Playback started: $url")
                         retryCount = 0 // 播放成功即重置重试计数器
+
+                        startPlayTimeMs = System.currentTimeMillis()
+                        lastWatchdogPts = 0L
                     }
 
                     MediaPlayer.Event.EncounteredError -> {
                         isDecoding = false
-                        Log.e("VLCDecoder", "Playback encountered error")
+                        Log.e("VLCDecoder", "Playback encountered error: $url")
                         retryCount++
                         if (retryCount <= maxRetryLimit) {
                             Log.w("VLCDecoder", "Preparing to retry connection")
                             // 给予硬件喘息时间，2秒后执行重连闭环
                             renderHandler.postDelayed({ retryPlay() }, 2000L)
                         } else {
-                            Log.e("VLCDecoder", "Max retries reached stream declared dead")
+                            Log.e("VLCDecoder", "Max retries reached stream declared dead: $url")
                             // 重试耗尽，通过闭包通知调度中心彻底抛弃此流
                             renderHandler.post { onStreamDead(url) }
                         }
@@ -166,25 +211,38 @@ class DecoderStream(
 
                     MediaPlayer.Event.Stopped -> {
                         isDecoding = false
-                        Log.i("VLCDecoder", "Playback stopped")
+                        Log.i("VLCDecoder", "Playback stopped: $url")
                     }
                 }
             }
             mediaPlayer?.vlcVout?.attachViews()
             mediaPlayer?.play()
+
+            // 启动看门狗巡逻
+            startPlayTimeMs = System.currentTimeMillis()
+            renderHandler.postDelayed(watchdogRunnable, 3000L)
         }
     }
 
     /**
-     * 执行内部重启媒体源的封装逻辑，供异常重连机制调用。
+     * 执行内部重启媒体源的封装逻辑，供异常重连机制或看门狗调用。
      */
     private fun retryPlay() {
+        Log.w("VLCDecoder", "Executing internal retry logic for: $url")
+        isDecoding = false
         mediaPlayer?.stop()
         VLCEngineManager.libVLC?.let { vlc ->
             val media = createMedia(vlc)
             mediaPlayer?.media = media
             media.release() // 再次防漏释放
             mediaPlayer?.play()
+
+            // 刷新看门狗哨兵时间，给予重启喘息期
+            startPlayTimeMs = System.currentTimeMillis()
+            lastWatchdogPts = 0L
+
+            // 被看门狗触发的强制重启，也记作一次重试，防止无限死循环把手机卡死
+            retryCount++
         }
     }
 
@@ -198,6 +256,10 @@ class DecoderStream(
         mediaOptions.forEach { option ->
             media.addOption(option)
         }
+        // 对于 HTTP/HTTPS 等互联网流，强行将缓存提升到 1.5 秒，抵抗网络抖动，防止“卡一下动一下”
+        if (url.startsWith("http", ignoreCase = true)) {
+            media.addOption(":network-caching=1500")
+        }
         return media
     }
 
@@ -209,7 +271,7 @@ class DecoderStream(
         // 获取 VLC 成功解析的当前视频轨道信息
         val track = mediaPlayer?.currentVideoTrack ?: return
 
-        // 【调用提取的公用函数】，直接解构出安全的高宽
+        // 直接解构出安全的高宽
         val (realW, realH) = getSafeResolution(track.width, track.height)
 
         // 如果获取到了有效的尺寸，并且与目前的 FBO 尺寸不符，则执行换膜操作
@@ -248,6 +310,8 @@ class DecoderStream(
      * 终极清理方法：停止解码、剥离视图，并彻底释放当前流占用的 VLC C++ 内存和 OpenGL 纹理显存。
      */
     fun release() {
+        // 销毁时务必拔掉看门狗的电源，防止内存泄露
+        renderHandler.removeCallbacks(watchdogRunnable)
         mediaPlayer?.stop()
         mediaPlayer?.vlcVout?.detachViews()
         mediaPlayer?.release()

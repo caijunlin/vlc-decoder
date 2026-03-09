@@ -16,6 +16,8 @@ object VLCEngineManager {
         "--no-audio",
         "--aout=dummy",
         "--rtsp-tcp",
+        "--http-reconnect",           // 允许 HTTP 内部断开重连
+        "--ipv4-timeout=5000",        // TCP 握手超时时间 5 秒
         "--network-caching=300",      // 减少内存在多路并发下的堆积
         "--drop-late-frames",         // 降低丢帧阈值，如果 VLC 内部判断晚了，直接丢弃
         "--skip-frames",

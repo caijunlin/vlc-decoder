@@ -33,7 +33,9 @@ class VLCVideoSurface(
         get() = _attributes["videoType".lowercase()] ?: ""
     private val videoData: String
         get() = _attributes["videoData".lowercase()] ?: ""
-
+    // 0是不能拖动1是可以拖动
+    private val draggable: Int
+        get() = _attributes["_draggable".lowercase()]?.toIntOrNull() ?: 0
     private var rect: Rect? = null
     private var surfaceWidth: Int = 0
     private var surfaceHeight: Int = 0
@@ -114,7 +116,7 @@ class VLCVideoSurface(
     }
 
     override fun onTouchEvent(event: MotionEvent?): Boolean {
-        if (event != null && videoSrc != "") {
+        if (event != null && videoSrc != "" && draggable == 1) {
             webView.post {
                 gestureHelper?.onTouchEvent(event, webView, id)
             }
