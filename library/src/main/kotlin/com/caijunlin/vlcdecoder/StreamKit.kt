@@ -1,6 +1,7 @@
 package com.caijunlin.vlcdecoder
 
 import android.content.Context
+import android.util.Log
 import com.caijunlin.vlcdecoder.callback.KernelInitCallback
 import com.caijunlin.vlcdecoder.core.KernelManager
 import com.caijunlin.vlcdecoder.core.VLCEngineManager
@@ -21,7 +22,7 @@ object StreamKit {
      * @param needAutoSaveLicense 是否自动缓存授权码到本地，默认为 true
      */
     @JvmStatic
-    fun init(context: Context, authCode: String, needAutoSaveLicense: Boolean = true) {
+    fun init(context: Context, authCode: String, needAutoSaveLicense: Boolean) {
         KernelManager.initKernel(context, authCode, needAutoSaveLicense)
         VLCEngineManager.init(context)
     }
@@ -54,6 +55,7 @@ object StreamKit {
      */
     @JvmStatic
     fun releaseAll(context: Context) {
+        Log.i("VLCDecoder", "Rel X5 & VLC res...")
         KernelManager.release(context)
         VLCEngineManager.release()
         releaseRender()

@@ -176,7 +176,6 @@ object KernelManager {
      * 释放内核及相关资源
      */
     fun release(context: Context) {
-        Log.i("VLCDecoder", "Rel X5 & VLC res...")
         QbSdk.clearAllWebViewCache(context, true)
         // 清理回调和状态
         callback = null
