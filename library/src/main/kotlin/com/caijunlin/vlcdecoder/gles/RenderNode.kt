@@ -8,7 +8,6 @@ import android.os.Looper
 import android.os.Process
 import android.util.Log
 import android.view.Surface
-import org.videolan.libvlc.LibVLC
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -77,7 +76,14 @@ class RenderNode(
      * @param opts 针对当前流的自定义播放参数
      * @param limit 当前节点允许管控的最大视频流数量上限
      */
-    fun handleBind(url: String, x5Surface: Surface, w: Int, h: Int, opts: ArrayList<String>, limit: Int) {
+    fun handleBind(
+        url: String,
+        x5Surface: Surface,
+        w: Int,
+        h: Int,
+        opts: ArrayList<String>,
+        limit: Int
+    ) {
         // 避免重复绑定同一个画布
         if (displayMap.containsKey(x5Surface)) return
 
@@ -322,7 +328,8 @@ class RenderNode(
                     }
 
                     try {
-                        val makeCurrentSuccess = eglCore.makeCurrent(window.eglSurface, eglCore.eglContext)
+                        val makeCurrentSuccess =
+                            eglCore.makeCurrent(window.eglSurface, eglCore.eglContext)
 
                         if (makeCurrentSuccess) {
                             // 每次切换上下文后，再次强制解除垂直同步，防范某些魔改 ROM 的显卡驱动暗中重置
@@ -401,17 +408,43 @@ class RenderNode(
     }
 
     /**
-     * 终极清理指令，清空内部容器，销毁所有 EGL 及流资源，并停止轮询。
+     * 软清理指令：清空内部容器，销毁所有占用内存的活动流和播放器。
+     * 但保留底层的 EGL 图形环境与线程池，实现下一次打开工程的“秒开”与资源复用。
      */
-    fun releaseAll() {
+    fun clearWorkspace() {
+        // 清理防抖延迟任务
         pendingReleaseTasks.values.forEach { handler.removeCallbacks(it) }
         pendingReleaseTasks.clear()
-        streams.values.forEach { it.release() }
-        displayMap.values.forEach { it.release(eglCore) }
-        streams.clear()
-        displayMap.clear()
-        // 销毁时停止心跳
+
+        // 停止渲染管线心跳
         handler.removeCallbacks(tickRunnable)
-        eglCore.release()
+        isTicking = false
+
+        // 核心防御：必须先切回内部安全的虚拟表面！
+        // 因为外部的 X5 画布可能已经被系统回收，继续挂载会导致底层的 EGLSurface 报 BadSurface 异常崩溃
+        eglCore.makeCurrentMain()
+
+        // 释放所有的 VLC 解码器、OES 纹理和 FBO 显存
+        streams.values.forEach { it.release() }
+        streams.clear()
+
+        // 释放所有与外部绑定的 EGLSurface 渲染目标
+        displayMap.values.forEach { it.release(eglCore) }
+        displayMap.clear()
     }
+
+    /**
+     * 硬清理指令：退出 App 时调用。
+     * 彻底销毁 EGL 上下文，并结束当前节点的私有渲染线程。
+     */
+    fun destroyNode() {
+        // 先执行软清理，把流和内存排空
+        clearWorkspace()
+        // 在自己的专属线程里，拔掉 EGL 的电源并自杀
+        handler.post {
+            eglCore.release()
+            thread.quitSafely() // 安全退出底层 HandlerThread
+        }
+    }
+
 }

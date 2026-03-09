@@ -16,6 +16,7 @@ import android.view.Surface
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
+import androidx.core.graphics.createBitmap
 
 /**
  * @author caijunlin
@@ -504,7 +505,7 @@ class EglCore {
                 )
 
                 if (buffer != null) {
-                    val rawBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    val rawBitmap = createBitmap(width, height)
                     (buffer as ByteBuffer).order(ByteOrder.nativeOrder())
                     rawBitmap.copyPixelsFromBuffer(buffer)
                     GLES30.glUnmapBuffer(GLES30.GL_PIXEL_PACK_BUFFER)

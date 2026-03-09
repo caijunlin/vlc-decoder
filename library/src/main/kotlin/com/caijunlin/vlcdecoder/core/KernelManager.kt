@@ -18,9 +18,6 @@ import java.io.FileOutputStream
  */
 object KernelManager {
 
-    private val kernelVersion = 48445
-    private val kernelFile = "tbs_core_048445_arm64-v8a.tbs"
-
     // 内部缓存初始化状态，解决时序和粘性事件问题
     private var isFinished = false
     private var isSuccess = false
@@ -77,6 +74,8 @@ object KernelManager {
         authCode: String,
         needAutoSaveLicense: Boolean
     ) {
+        val kernelVersion = 48445
+        val kernelFile = "tbs_core_048445_arm64-v8a.tbs"
         val map = HashMap<String, Any>()
         map[TbsCoreSettings.MULTI_PROCESS_ENABLE] = TbsCoreSettings.Render.MULTI_PROCESS_OPEN
         QbSdk.initTbsSettings(map)

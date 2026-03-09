@@ -175,11 +175,25 @@ object VLCRenderPool {
         }
     }
 
-    // 终极清理指令排空路由矩阵并通知麾下全员自毁
+    /**
+     * 软释放：关闭当前工程/网页时调用。
+     * 仅清空路由表和播放资源，保留 4 个节点的 EGL 线程底座，随时准备秒开下一个工程。
+     */
+    fun releaseWorkspace() {
+        surfaceRouteMap.clear()
+        renderNodes.forEach { node ->
+            node.handler.post { node.clearWorkspace() }
+        }
+    }
+
+    /**
+     * 硬释放：彻底退出 App 时调用。
+     * 发送核平指令，让所有节点销毁 EGL 环境并结束线程。
+     */
     fun release() {
         surfaceRouteMap.clear()
         renderNodes.forEach { node ->
-            node.handler.post { node.releaseAll() }
+            node.destroyNode()
         }
     }
 

@@ -22,7 +22,8 @@ object StreamKit {
      * @param needAutoSaveLicense 是否自动缓存授权码到本地，默认为 true
      */
     @JvmStatic
-    fun init(context: Context, authCode: String, needAutoSaveLicense: Boolean) {
+    @JvmOverloads
+    fun init(context: Context, authCode: String, needAutoSaveLicense: Boolean = true) {
         KernelManager.initKernel(context, authCode, needAutoSaveLicense)
         VLCEngineManager.init(context)
     }
@@ -42,23 +43,26 @@ object StreamKit {
     }
 
     /**
-     * 释放渲染资源、销毁 EGL 环境
+     * 软释放：关闭当前工程（或退出当前浏览器页面）时调用。
+     * 释放渲染资源，但不销毁 EGL 底层环境，保证下次打开秒播。
      */
     @JvmStatic
     fun releaseRender() {
         WidgetManager.clearAll()
-        VLCRenderPool.release()
+        VLCRenderPool.releaseWorkspace()
     }
 
     /**
-     * 终极核平指令：释放所有的渲染资源、销毁 EGL 环境以及底层的 LibVLC 引擎实例。通常在 App 退出时调用。
+     * 终极核平指令：彻底退出 App 时调用。
+     * 释放所有的渲染资源、销毁 4 个 EGL 环境线程以及底层的 LibVLC 引擎实例。
      */
     @JvmStatic
     fun releaseAll(context: Context) {
         Log.i("VLCDecoder", "Rel X5 & VLC res...")
-        KernelManager.release(context)
+        WidgetManager.clearAll()
+        VLCRenderPool.release()
         VLCEngineManager.release()
-        releaseRender()
+        KernelManager.release(context)
     }
 
 }
