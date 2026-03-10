@@ -10,7 +10,7 @@ import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import java.util.concurrent.CopyOnWriteArrayList
-
+import java.util.concurrent.atomic.AtomicBoolean
 /**
  * @author caijunlin
  * @date   2026/3/2
@@ -55,8 +55,7 @@ class DecoderStream(
     val transformMatrix = FloatArray(16)
 
     // 标记底层图形队列是否已经有新的视频帧解码完毕等待 OpenGL 更新
-    @Volatile
-    var frameAvailable = false
+    val frameAvailable = AtomicBoolean(false)
 
     // 用于保存当前解码帧的真实硬件时间戳（PTS），单位为纳秒
     @Volatile
@@ -106,7 +105,10 @@ class DecoderStream(
                     // 还在苦苦等待第一帧画面，给它 15 秒的超长容忍期（应对慢速网络握手或高延迟HLS）
                     val waitFirstFrameTime = System.currentTimeMillis() - startPlayTimeMs
                     if (waitFirstFrameTime > 15000L) {
-                        Log.e("VLCDecoder", "Watchdog Bite! 15s timeout waiting for FIRST frame: $url")
+                        Log.e(
+                            "VLCDecoder",
+                            "Watchdog Bite! 15s timeout waiting for FIRST frame: $url"
+                        )
                         retryPlay()
                         return // 重启后直接打断本次轮询
                     }
@@ -115,7 +117,10 @@ class DecoderStream(
                     // 已经出图了，开始比对硬件时间戳。
                     // 如果现在的 PTS 和 3 秒前巡逻时的 PTS 一模一样，说明彻底卡死（假死）！
                     if (lastPts != 0L && lastPts == lastWatchdogPts) {
-                        Log.e("VLCDecoder", "Watchdog Bite! Video PTS completely frozen at $lastPts: $url")
+                        Log.e(
+                            "VLCDecoder",
+                            "Watchdog Bite! Video PTS completely frozen at $lastPts: $url"
+                        )
                         retryPlay()
                         return // 重启后直接打断本次轮询
                     }
@@ -204,6 +209,9 @@ class DecoderStream(
                             renderHandler.postDelayed({ retryPlay() }, 2000L)
                         } else {
                             Log.e("VLCDecoder", "Max retries reached stream declared dead: $url")
+                            displayWindows.forEach { window ->
+                                window.clientRef.get()?.onPlaybackFailed(url)
+                            }
                             // 重试耗尽，通过闭包通知调度中心彻底抛弃此流
                             renderHandler.post { onStreamDead(url) }
                         }
@@ -303,7 +311,7 @@ class DecoderStream(
      * @param st 触发回调的表面纹理对象
      */
     override fun onFrameAvailable(st: SurfaceTexture) {
-        frameAvailable = true
+        frameAvailable.set(true)
     }
 
     /**

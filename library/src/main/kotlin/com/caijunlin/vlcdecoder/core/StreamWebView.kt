@@ -150,7 +150,6 @@ class StreamWebView : WebView, IEmbeddedWidgetClientFactory {
         this.webChromeClient = null
         this.stopLoading()
         this.clearHistory()
-        this.settings.javaScriptEnabled = false
         this.clearCache(true)
         this.clearFormData()
         this.clearMatches()

@@ -3,20 +3,24 @@ package com.caijunlin.vlcdecoder.gles
 import android.opengl.EGL14
 import android.opengl.EGLSurface
 import android.view.Surface
+import java.lang.ref.WeakReference
 
 /**
  * @author caijunlin
  * @date   2026/3/2
  * @description   显示窗口数据模型彻底剥离业务状态仅作为封装物理画布和矩阵参数的纯粹容器
  */
-class DisplayWindow(val x5Surface: Surface) {
+class DisplayWindow(val x5Surface: Surface, client: IVideoRenderClient) {
+
+    val clientRef = WeakReference(client)
 
     // 基于外部物理画布创建的 EGL 渲染目标表面对象
     var eglSurface: EGLSurface = EGL14.EGL_NO_SURFACE
         private set
 
     // 标记当前窗口是否需要重绘（尺寸改变，或者刚绑定时）
-    @Volatile var isDirty = true
+    @Volatile
+    var isDirty = true
 
     // 外部画布当前的物理像素宽度
     var physicalW: Int = 0

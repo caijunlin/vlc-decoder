@@ -26,7 +26,7 @@ object WidgetManager {
         }
         widgetCache.removeAll { it.id == id }
         widgetCache.add(widget)
-        Log.d("VLCDecoder", "Cached widget with id: $id. Total widgets: ${widgetCache.size}")
+        Log.d("VLCDecoder", "Cached widget with id: $id")
     }
 
     /**
@@ -36,12 +36,10 @@ object WidgetManager {
      */
     fun removeWidget(id: String?) {
         if (id.isNullOrEmpty()) return
-
         val removed = widgetCache.removeAll { it.id == id }
         if (removed) {
             Log.d(
-                "VLCDecoder",
-                "Removed widget with id: $id. Remaining widgets: ${widgetCache.size}"
+                "VLCDecoder", "Removed widget with id: $id"
             )
         }
     }
@@ -57,9 +55,9 @@ object WidgetManager {
     /**
      * 通过 x, y 获取最顶层的 VLCVideoWidget
      * @param webView 承载的 X5 WebView
-     * @param x Android 触摸事件的物理 X 坐标
+     * @param x Android 触摸事件的物理 X 坐标 (绝对不能是除过 dpr 的值，传最原始的 MotionEvent.x)
      * @param y Android 触摸事件的物理 Y 坐标
-     * @param callback 异步回调，返回命中的 VLCVideoWidget，若未命中或被遮挡则返回 null
+     * @param callback 异步回调
      */
     fun getWidgetAt(
         webView: WebView,
@@ -68,17 +66,41 @@ object WidgetManager {
         y: Float,
         callback: (VLCVideoSurface?) -> Unit
     ) {
+        // 拿到 Android 端 WebView 的真实物理宽高
+        val androidW = webView.width
+        val androidH = webView.height
+
+        // 极度防御：防止除数为 0 导致 JS 报错
+        if (androidW == 0 || androidH == 0) {
+            callback(null)
+            return
+        }
+
         val jsCode = """
-            (function(x, y) {
-                var element = document.elementFromPoint(x, y);
-                while(element && element !== document.body) {
+            (function(aX, aY, aW, aH) {
+                // 获取 Web 端视口的真实 CSS 宽高 (规避滚动条影响使用 clientWidth)
+                var webW = document.documentElement.clientWidth || window.innerWidth;
+                var webH = document.documentElement.clientHeight || window.innerHeight;
+                
+                // 动态计算出物理坐标到 CSS 坐标的真实缩放比
+                // 无论前端怎么写 viewport，甚至无论用户怎么双指缩放，这个比例永远是对的
+                var scaleX = webW / aW;
+                var scaleY = webH / aH;
+                
+                // 将传入的 Android 物理坐标转换为 Web CSS 坐标
+                var cssX = aX * scaleX;
+                var cssY = aY * scaleY;
+                
+                // 使用转换后的 CSS 坐标去获取 DOM 元素
+                var element = document.elementFromPoint(cssX, cssY);
+                while(element && element !== document.body && element !== document.documentElement) {
                     if (element.tagName.toLowerCase() === '$tagName') {
                         return element.id; 
                     }
                     element = element.parentElement;
                 }
                 return null;
-            })($x, $y);
+            })($x, $y, $androidW, $androidH);
         """.trimIndent()
         Log.d("VLCDecoder", "JS Code: $jsCode")
         webView.evaluateJavascript(jsCode) { result ->

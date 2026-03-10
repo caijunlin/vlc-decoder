@@ -50,6 +50,7 @@ object KernelManager {
     /**
      * 初始化内核入口
      */
+    @Synchronized
     fun initKernel(context: Context, authCode: String, needAutoSaveLicense: Boolean) {
         if (onload) {
             return

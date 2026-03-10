@@ -71,16 +71,14 @@ class RenderNode(
      *
      * @param url 视频流的网络地址
      * @param x5Surface 外部提供的目标渲染画布
-     * @param w 画布物理宽度
-     * @param h 画布物理高度
+     * @param client 绘画客户端
      * @param opts 针对当前流的自定义播放参数
      * @param limit 当前节点允许管控的最大视频流数量上限
      */
     fun handleBind(
         url: String,
         x5Surface: Surface,
-        w: Int,
-        h: Int,
+        client: IVideoRenderClient,
         opts: ArrayList<String>,
         limit: Int
     ) {
@@ -102,10 +100,10 @@ class RenderNode(
         }
 
         // 为传入的外部物理表面包装一层 EGL 环境
-        val window = DisplayWindow(x5Surface)
+        val window = DisplayWindow(x5Surface, client)
         window.initEGLSurface(eglCore)
-        window.physicalW = w
-        window.physicalH = h
+        window.physicalW = client.getTargetWidth()
+        window.physicalH = client.getTargetHeight()
         window.isDirty = true
 
         // 首次绑定时，强行解除该 EGL 表面的垂直同步等待，释放底层性能
@@ -268,7 +266,7 @@ class RenderNode(
             if (stream.displayWindows.isEmpty()) continue
             hasActiveDraws = true
 
-            if (stream.frameAvailable) {
+            if (stream.frameAvailable.getAndSet(false)) {
                 if (!isDummyCurrent) {
                     eglCore.makeCurrentMain()
                     isDummyCurrent = true
@@ -282,8 +280,10 @@ class RenderNode(
                     if (!stream.hasFirstFrame) {
                         stream.checkAndUpdateResolution()
                         stream.hasFirstFrame = true
+                        stream.displayWindows.forEach { window ->
+                            window.clientRef.get()?.onFirstFrameRendered(stream.url)
+                        }
                     }
-                    stream.frameAvailable = false
 
                     // 执行空间转码，写入私有 FBO 画板
                     eglCore.drawOESToFBO(

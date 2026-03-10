@@ -39,6 +39,7 @@ object VLCEngineManager {
     /**
      * 初始化全局解析引擎实体并装载缺省底层优化参数
      */
+    @Synchronized
     fun init(context: Context, args: ArrayList<String> = defaultVlcArgs) {
         if (libVLC == null) {
             synchronized(this) {
