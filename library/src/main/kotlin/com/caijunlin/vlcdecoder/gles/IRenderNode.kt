@@ -57,6 +57,8 @@ interface IRenderNode {
      */
     fun handleCapture(x5Surface: Surface, callback: (Bitmap?) -> Unit)
 
+    fun handleCaptureSync(x5Surface: Surface): Bitmap?
+
     /**
      * 清空画布并将其置为透明黑底
      * @param x5Surface 目标画布

@@ -393,6 +393,38 @@ class EGLCore {
     }
 
     /**
+     * 直接同步读取 FBO 像素并生成位图。
+     * 会短暂阻塞当前 GL 线程直到数据拷贝完成，非常适合 UI 交互引发的单次极速截帧。
+     */
+    fun readPixelsFromFBOSync(fboId: Int, width: Int, height: Int): Bitmap? {
+        try {
+            makeCurrentMain()
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fboId)
+
+            // 直接分配直接内存缓冲区
+            val buffer = ByteBuffer.allocateDirect(width * height * 4)
+            buffer.order(ByteOrder.nativeOrder())
+
+            // 同步阻塞读取，瞬间抽出画面
+            GLES30.glReadPixels(0, 0, width, height, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, buffer)
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+
+            buffer.rewind()
+            val rawBitmap = createBitmap(width, height)
+            rawBitmap.copyPixelsFromBuffer(buffer)
+
+            // 翻转图像（OpenGL 的 Y 轴与 Android 是反的）
+            val flipMatrix = android.graphics.Matrix().apply { postScale(1f, -1f) }
+            val finalBitmap = Bitmap.createBitmap(rawBitmap, 0, 0, width, height, flipMatrix, true)
+            rawBitmap.recycle()
+
+            return finalBitmap
+        } catch (e: Exception) {
+            return null
+        }
+    }
+
+    /**
      * 彻底解绑硬件图形环境并摧毁引擎核心中占用的底层资源池空间防范系统内存泄露风险
      */
     fun release() {

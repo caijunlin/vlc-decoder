@@ -8,6 +8,8 @@ import android.view.Surface
 import com.caijunlin.vlcdecoder.core.VLCEngineManager
 import java.util.Collections.synchronizedMap
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
 /**
@@ -133,6 +135,23 @@ object VLCRenderPool {
         val x5Surface = client.getTargetSurface() ?: return
         val node = getNodeByUrl(url)
         node.handler.post { node.handleCapture(x5Surface, callback) }
+    }
+
+    fun captureClientFrameSync(client: IVideoRenderClient): Bitmap? {
+        val url = clientRouteMap[client] ?: return null
+        val x5Surface = client.getTargetSurface() ?: return null
+        val node = getNodeByUrl(url)
+        var result: Bitmap? = null
+        val latch = CountDownLatch(1)
+        node.handler.post {
+            try {
+                result = node.handleCaptureSync(x5Surface)
+            } finally {
+                latch.countDown()
+            }
+        }
+        latch.await(200, TimeUnit.MILLISECONDS)
+        return result
     }
 
     fun clearClient(client: IVideoRenderClient) {

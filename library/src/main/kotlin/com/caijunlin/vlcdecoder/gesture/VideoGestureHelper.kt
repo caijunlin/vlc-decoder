@@ -69,13 +69,11 @@ class VideoGestureHelper(
             // 计算出手指相对于视图的比例坐标
             val touchX = downX / scaleX
             val touchY = downY / scaleY
-
-            VLCRenderPool.captureClientFrame(client) { bitmap ->
-                if (bitmap != null) {
-                    startNativeDrag(bitmap, touchX, touchY, physicalW, physicalH)
-                } else {
-                    isDragInProgress = false
-                }
+            val bitmap = VLCRenderPool.captureClientFrameSync(client)
+            if (bitmap != null) {
+                startNativeDrag(bitmap, touchX, touchY, physicalW, physicalH)
+            } else {
+                isDragInProgress = false
             }
         }
     }

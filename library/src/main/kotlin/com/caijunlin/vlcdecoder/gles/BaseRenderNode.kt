@@ -82,6 +82,15 @@ abstract class BaseRenderNode<T : BaseDecoderStream>(
         eglCore.readPixelsFromFBOAsync(targetStream.fboId, targetStream.videoWidth, targetStream.videoHeight, handler, callback)
     }
 
+    override fun handleCaptureSync(x5Surface: Surface): Bitmap? {
+        val window = displayMap[x5Surface] ?: return null
+        val targetStream = streams.values.find { it.displayWindows.contains(window) }
+        if (targetStream == null || targetStream.fboId == -1) return null
+
+        eglCore.makeCurrentMain()
+        return eglCore.readPixelsFromFBOSync(targetStream.fboId, targetStream.videoWidth, targetStream.videoHeight)
+    }
+
     override fun handleClearSurface(x5Surface: Surface) {
         val window = displayMap[x5Surface]
         if (window != null && window.x5Surface.isValid) {
