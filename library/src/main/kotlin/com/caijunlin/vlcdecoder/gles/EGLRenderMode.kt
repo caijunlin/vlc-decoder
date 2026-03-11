@@ -1,11 +1,14 @@
 package com.caijunlin.vlcdecoder.gles
 
+import androidx.annotation.Keep
+
 /**
  * @author caijunlin
  * @date   2026/3/10
  * @description 声明当前渲染池所采用的并发工作模式
  */
-enum class RenderMode {
+@Keep
+enum class EGLRenderMode {
     /** RK 板卡专用的狂暴轮询锁帧模式 */
     RK,
 

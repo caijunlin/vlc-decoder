@@ -18,7 +18,7 @@ import kotlin.math.abs
 object VLCRenderPool {
 
     @Volatile
-    var model: RenderMode = RenderMode.RK
+    var model: EGLRenderMode = EGLRenderMode.RK
 
     private val defaultMediaArgs = arrayListOf(
         ":network-caching=300",
@@ -29,7 +29,7 @@ object VLCRenderPool {
     private var maxStreamLimit = 16
 
     private val NODE_COUNT: Int by lazy {
-        if (model == RenderMode.MOBILE) {
+        if (model == EGLRenderMode.MOBILE) {
             kotlin.math.max(1, kotlin.math.min(Runtime.getRuntime().availableProcessors() / 2, 6))
         } else {
             4
@@ -38,7 +38,7 @@ object VLCRenderPool {
 
     private val renderNodes: Array<IRenderNode> by lazy {
         Array(NODE_COUNT) { index ->
-            if (model == RenderMode.MOBILE) {
+            if (model == EGLRenderMode.MOBILE) {
                 com.caijunlin.vlcdecoder.gles.mobile.RenderNode("VlcNode-Mobile-$index") { _, deadSurfaces ->
                     deadSurfaces.forEach { surfaceRouteMap.remove(it) }
                 }
