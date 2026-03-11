@@ -8,6 +8,7 @@ import android.view.Surface
  * @description 视频渲染客户端接口用于取代繁琐的参数传递，并接收底层引擎异步反馈的真实业务状态。
  */
 interface IVideoRenderClient {
+    fun getElementId(): String
     /**
      * 获取目标物理画布
      * @return 原生 Surface 对象

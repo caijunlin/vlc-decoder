@@ -44,12 +44,13 @@ class VLCVideoSurface(
 
     // 真实的业务状态确认
     private var isActuallyPlaying = false
+    override fun getElementId(): String = id
     override fun getTargetSurface(): Surface? = x5Surface
     override fun getTargetWidth(): Int = surfaceWidth
     override fun getTargetHeight(): Int = surfaceHeight
     private var gestureHelper: VideoGestureHelper = VideoGestureHelper(
         client = this,
-        dragHostView = webView,
+        webView = webView,
         onDropAction = { centerX, centerY, width, height ->
             val webViewRect = Rect(0, 0, webView.width, webView.height)
             Log.i("VLCDecoder", "onDropAction $centerX $centerY $width $height")
@@ -133,7 +134,7 @@ class VLCVideoSurface(
         if (event != null && videoSrc != "" && draggable == 1) {
             val e = MotionEvent.obtain(event)
             webView.post {
-                gestureHelper.onTouchEvent(e, webView, id)
+                gestureHelper.onTouchEvent(e)
                 // 异步用完后，必须手动回收这个克隆的事件防泄漏
                 e.recycle()
             }
@@ -175,6 +176,7 @@ class VLCVideoSurface(
 
     override fun onDestroy() {
 //        Log.i("VLCDecoder", "onDestroy $id")
+        gestureHelper.destroy()
         unbind()
         x5Surface = null
         WidgetManager.removeWidget(this.id)
