@@ -88,9 +88,6 @@ abstract class BaseDecoderStream(
     protected fun createMedia(vlc: LibVLC): Media {
         val media = Media(vlc, url.toUri())
         mediaOptions.forEach { media.addOption(it) }
-        if (url.startsWith("http", ignoreCase = true)) {
-            media.addOption(":network-caching=1500")
-        }
         return media
     }
 

@@ -22,6 +22,7 @@ object VLCRenderPool {
 
     private val defaultMediaArgs = arrayListOf(
         ":network-caching=300",
+        ":drop-late-frames",
         ":input-repeat=65535"
     )
 
