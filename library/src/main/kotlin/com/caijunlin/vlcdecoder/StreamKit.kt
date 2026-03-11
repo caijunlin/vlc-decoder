@@ -5,6 +5,7 @@ import android.util.Log
 import com.caijunlin.vlcdecoder.callback.KernelInitCallback
 import com.caijunlin.vlcdecoder.core.KernelManager
 import com.caijunlin.vlcdecoder.core.VLCEngineManager
+import com.caijunlin.vlcdecoder.gles.RenderMode
 import com.caijunlin.vlcdecoder.gles.VLCRenderPool
 import com.caijunlin.vlcdecoder.widget.WidgetManager
 
@@ -19,12 +20,19 @@ object StreamKit {
      * 初始化X5
      * @param context 应用上下文对象，用于引擎获取系统硬件信息
      * @param authCode X5浏览器内核授权码
+     * @param renderMode 渲染模式
      * @param needAutoSaveLicense 是否自动缓存授权码到本地，默认为 true
      */
     @JvmStatic
     @JvmOverloads
-    fun init(context: Context, authCode: String, needAutoSaveLicense: Boolean = true) {
+    fun init(
+        context: Context,
+        authCode: String,
+        renderMode: RenderMode,
+        needAutoSaveLicense: Boolean = true
+    ) {
         KernelManager.initKernel(context, authCode, needAutoSaveLicense)
+        VLCRenderPool.model = renderMode
         VLCEngineManager.init(context)
     }
 

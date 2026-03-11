@@ -21,5 +21,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "VlcDecoderEngine"
+rootProject.name = "VLCDecoderEngine"
 include(":library")

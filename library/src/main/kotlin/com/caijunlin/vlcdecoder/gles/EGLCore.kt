@@ -13,68 +13,47 @@ import android.opengl.Matrix
 import android.os.Handler
 import android.os.Looper
 import android.view.Surface
+import androidx.core.graphics.createBitmap
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
-import androidx.core.graphics.createBitmap
 
 /**
  * @author caijunlin
- * @date   2026/2/28
- * @description   底层的 EGL14 渲染核心引擎负责管理硬件环境上下文着色器程序的编译执行以及 FBO 内存资源的分配调度
+ * @date   2026/3/10
+ * @description 底层的 EGL14 渲染核心引擎，统管双端硬件环境上下文、着色器程序的编译执行以及 FBO 内存资源的分配调度
  */
-class EglCore {
-
-    // 硬件设备的 EGL 显示链接句柄
+class EGLCore {
+    /** 硬件设备的 EGL 显示链接句柄 */
     private var eglDisplay: EGLDisplay = EGL14.EGL_NO_DISPLAY
-
-    // 全局唯一的主渲染上下文环境
+    /** 全局唯一的主渲染上下文环境 */
     var eglContext: EGLContext = EGL14.EGL_NO_CONTEXT
         private set
-
-    // 描述图形表面像素格式与深度的配置对象
+    /** 描述图形表面像素格式与深度的配置对象 */
     private var eglConfig: EGLConfig? = null
-
-    // 用于维持 OpenGL 状态机的隐藏离屏虚拟表面对象
+    /** 用于维持 OpenGL 状态机的隐藏离屏虚拟表面对象 */
     var dummySurface: EGLSurface = EGL14.EGL_NO_SURFACE
         private set
 
-    // 第一阶段 OES 转码着色器程序的唯一标识符
     private var oesProgramId = 0
-
-    // 第一阶段着色器中顶点变换矩阵变量的显存地址位置
     private var uOesTransformMatrixLoc = -1
-
-    // 第一阶段着色器中投影观察矩阵变量的显存地址位置
     private var uOesMvpMatrixLoc = -1
-
-    // 第一阶段着色器中外部 OES 纹理采样器变量的显存地址位置
     private var texOESLoc = -1
 
-    // 第二阶段二维贴图着色器程序的唯一标识符
     private var tex2DProgramId = 0
-
-    // 第二阶段着色器中投影观察矩阵变量的显存地址位置
     private var uTex2DMvpMatrixLoc = -1
-
-    // 第二阶段着色器中标准二维纹理采样器变量的显存地址位置
     private var tex2DLoc = -1
 
-    // 存储标准矩形渲染图元四个角坐标的客户端内存缓冲区
     private val vertexBuffer: FloatBuffer
-
-    // 全局通用的单位矩阵数组用于无缩放的原始映射渲染
     private val identityMatrix = FloatArray(16).apply { Matrix.setIdentityM(this, 0) }
 
     init {
-        // 构建能够覆盖整个渲染视口的标准化顶点坐标序列
         val vertices = floatArrayOf(
             -1f, -1f, 0f, 0f, 0f,
             1f, -1f, 0f, 1f, 0f,
             -1f, 1f, 0f, 0f, 1f,
             1f, 1f, 0f, 1f, 1f
         )
-        // 将浮点数组转化为硬件可以直接高速读取的直接内存字节缓冲
         vertexBuffer = ByteBuffer.allocateDirect(vertices.size * 4)
             .order(ByteOrder.nativeOrder()).asFloatBuffer().put(vertices).apply { position(0) }
     }
@@ -83,17 +62,15 @@ class EglCore {
      * 启动硬件图形引擎环境选择像素配置并编译挂载流水线所需的两套着色器程序
      */
     fun initEGL() {
-        // 获取默认屏幕显卡的驱动链接
         eglDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
         val version = IntArray(2)
         EGL14.eglInitialize(eglDisplay, version, 0, version, 1)
 
-        // 设定色彩位深参数要求选用支持 OpenGL ES3 版本的硬件配置
         val attributes = intArrayOf(
             EGL14.EGL_RED_SIZE, 8,
             EGL14.EGL_GREEN_SIZE, 8,
             EGL14.EGL_BLUE_SIZE, 8,
-            EGL14.EGL_ALPHA_SIZE, 8,
+            EGL14.EGL_ALPHA_SIZE, 8, // 手机端必须申请 Alpha 通道
             EGL14.EGL_RENDERABLE_TYPE, 0x40,
             EGL14.EGL_NONE
         )
@@ -102,31 +79,19 @@ class EglCore {
         EGL14.eglChooseConfig(eglDisplay, attributes, 0, configs, 0, 1, numConfigs, 0)
         eglConfig = configs[0]
 
-        // 实例化具有 ES3 能力的全局图形上下文
         val contextAttributes = intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 3, EGL14.EGL_NONE)
-        eglContext =
-            EGL14.eglCreateContext(
-                eglDisplay,
-                eglConfig,
-                EGL14.EGL_NO_CONTEXT,
-                contextAttributes,
-                0
-            )
+        eglContext = EGL14.eglCreateContext(eglDisplay, eglConfig, EGL14.EGL_NO_CONTEXT, contextAttributes, 0)
 
-        // 构建一个微小的一像素虚拟面板用于激活渲染管线后台运行
         val bufferAttributes = intArrayOf(EGL14.EGL_WIDTH, 1, EGL14.EGL_HEIGHT, 1, EGL14.EGL_NONE)
         dummySurface = EGL14.eglCreatePbufferSurface(eglDisplay, eglConfig, bufferAttributes, 0)
 
-        // 将当前线程挂载至主环境
         makeCurrentMain()
 
-        // 编译外部纹理解码程序并捕获所有输入变量入口
         oesProgramId = createOESProgram()
         uOesTransformMatrixLoc = GLES30.glGetUniformLocation(oesProgramId, "uTransformMatrix")
         uOesMvpMatrixLoc = GLES30.glGetUniformLocation(oesProgramId, "uMVPMatrix")
         texOESLoc = GLES30.glGetUniformLocation(oesProgramId, "texOES")
 
-        // 编译内部二维制图程序并捕获所有输入变量入口
         tex2DProgramId = createTex2DProgram()
         uTex2DMvpMatrixLoc = GLES30.glGetUniformLocation(tex2DProgramId, "uMVPMatrix")
         tex2DLoc = GLES30.glGetUniformLocation(tex2DProgramId, "tex2D")
@@ -194,47 +159,19 @@ class EglCore {
         val fbo = IntArray(1)
         val tex = IntArray(1)
 
-        // 激活并申请帧缓冲与普通纹理名
         GLES30.glGenFramebuffers(1, fbo, 0)
         GLES30.glGenTextures(1, tex, 0)
 
-        // 配置目标纹理的内容格式尺寸及边缘防锯齿采样策略
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, tex[0])
-        GLES30.glTexImage2D(
-            GLES30.GL_TEXTURE_2D,
-            0,
-            GLES30.GL_RGBA,
-            width,
-            height,
-            0,
-            GLES30.GL_RGBA,
-            GLES30.GL_UNSIGNED_BYTE,
-            null
-        )
+        GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, width, height, 0, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null)
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR)
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR)
-        GLES30.glTexParameteri(
-            GLES30.GL_TEXTURE_2D,
-            GLES30.GL_TEXTURE_WRAP_S,
-            GLES30.GL_CLAMP_TO_EDGE
-        )
-        GLES30.glTexParameteri(
-            GLES30.GL_TEXTURE_2D,
-            GLES30.GL_TEXTURE_WRAP_T,
-            GLES30.GL_CLAMP_TO_EDGE
-        )
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
 
-        // 将预设好的纹理嵌入帧缓冲挂载点使其具备离屏作画的能力
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fbo[0])
-        GLES30.glFramebufferTexture2D(
-            GLES30.GL_FRAMEBUFFER,
-            GLES30.GL_COLOR_ATTACHMENT0,
-            GLES30.GL_TEXTURE_2D,
-            tex[0],
-            0
-        )
+        GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0, GLES30.GL_TEXTURE_2D, tex[0], 0)
 
-        // 处理完毕后恢复默认通道状态
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0)
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
         return intArrayOf(fbo[0], tex[0])
@@ -259,26 +196,10 @@ class EglCore {
         GLES30.glGenTextures(1, textures, 0)
         val oesTextureId = textures[0]
         GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTextureId)
-        GLES30.glTexParameterf(
-            GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
-            GLES30.GL_TEXTURE_MIN_FILTER,
-            GLES30.GL_LINEAR.toFloat()
-        )
-        GLES30.glTexParameterf(
-            GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
-            GLES30.GL_TEXTURE_MAG_FILTER,
-            GLES30.GL_LINEAR.toFloat()
-        )
-        GLES30.glTexParameteri(
-            GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
-            GLES30.GL_TEXTURE_WRAP_S,
-            GLES30.GL_CLAMP_TO_EDGE
-        )
-        GLES30.glTexParameteri(
-            GLES11Ext.GL_TEXTURE_EXTERNAL_OES,
-            GLES30.GL_TEXTURE_WRAP_T,
-            GLES30.GL_CLAMP_TO_EDGE
-        )
+        GLES30.glTexParameterf(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR.toFloat())
+        GLES30.glTexParameterf(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR.toFloat())
+        GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE)
+        GLES30.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE)
         return oesTextureId
     }
 
@@ -298,31 +219,16 @@ class EglCore {
      * @param width 渲染画板操作视口的像素宽度
      * @param height 渲染画板操作视口的像素高度
      */
-    fun drawOESToFBO(
-        fboId: Int,
-        oesTextureId: Int,
-        transformMatrix: FloatArray,
-        width: Int,
-        height: Int
-    ) {
-        // 定位并激活专用画板
+    fun drawOESToFBO(fboId: Int, oesTextureId: Int, transformMatrix: FloatArray, width: Int, height: Int) {
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fboId)
         GLES30.glViewport(0, 0, width, height)
-
-        // 唤醒解码着色引擎提供顶点参数
         GLES30.glUseProgram(oesProgramId)
         bindVertexData()
-
-        // 下发变换映射规则参数
         GLES30.glUniformMatrix4fv(uOesTransformMatrixLoc, 1, false, transformMatrix, 0)
         GLES30.glUniformMatrix4fv(uOesMvpMatrixLoc, 1, false, identityMatrix, 0)
-
-        // 指定采样通道喂入外部多媒体材质
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
         GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, oesTextureId)
         GLES30.glUniform1i(texOESLoc, 0)
-
-        // 发令执行绘制并即刻清除绑定
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
         GLES30.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, 0)
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
@@ -336,22 +242,13 @@ class EglCore {
      * @param height 最终显像目标视口的物理像素高度
      */
     fun drawTex2DScreen(tex2DId: Int, mvpMatrix: FloatArray, width: Int, height: Int) {
-        // 定制最终落子的映射画面范围
         GLES30.glViewport(0, 0, width, height)
-
-        // 唤醒盖章着色引擎提供顶点参数
         GLES30.glUseProgram(tex2DProgramId)
         bindVertexData()
-
-        // 依据提供的投影矩阵确定位置和尺寸
         GLES30.glUniformMatrix4fv(uTex2DMvpMatrixLoc, 1, false, mvpMatrix, 0)
-
-        // 喂入预先准备好的静止二维贴图
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, tex2DId)
         GLES30.glUniform1i(tex2DLoc, 0)
-
-        // 发令执行绘制盖章并断开连接
         GLES30.glDrawArrays(GLES30.GL_TRIANGLE_STRIP, 0, 4)
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0)
     }
@@ -360,12 +257,9 @@ class EglCore {
      * 向显卡管线的各个通道提交激活所需的顶点坐标值与材质纹理映射坐标数据
      */
     private fun bindVertexData() {
-        // 提供矩形的绝对位置信息
         vertexBuffer.position(0)
         GLES30.glVertexAttribPointer(0, 3, GLES30.GL_FLOAT, false, 20, vertexBuffer)
         GLES30.glEnableVertexAttribArray(0)
-
-        // 提供矩形内部对应的材质抓取信息
         vertexBuffer.position(3)
         GLES30.glVertexAttribPointer(1, 2, GLES30.GL_FLOAT, false, 20, vertexBuffer)
         GLES30.glEnableVertexAttribArray(1)
@@ -377,8 +271,7 @@ class EglCore {
      */
     private fun createOESProgram(): Int {
         val v = GLES30.glCreateShader(GLES30.GL_VERTEX_SHADER).also {
-            GLES30.glShaderSource(
-                it, """#version 300 es
+            GLES30.glShaderSource(it, """#version 300 es
             layout(location = 0) in vec4 aPosition;
             layout(location = 1) in vec4 aTexCoord;
             uniform mat4 uTransformMatrix;
@@ -388,20 +281,17 @@ class EglCore {
                 gl_Position = uMVPMatrix * aPosition; 
                 vTexCoord = (uTransformMatrix * aTexCoord).xy; 
             }
-        """
-            ); GLES30.glCompileShader(it)
+        """); GLES30.glCompileShader(it)
         }
         val f = GLES30.glCreateShader(GLES30.GL_FRAGMENT_SHADER).also {
-            GLES30.glShaderSource(
-                it, """#version 300 es
+            GLES30.glShaderSource(it, """#version 300 es
             #extension GL_OES_EGL_image_external_essl3 : require
             precision mediump float;
             in vec2 vTexCoord;
             uniform samplerExternalOES texOES;
             layout(location = 0) out vec4 fragColor;
             void main() { fragColor = texture(texOES, vTexCoord); }
-        """
-            ); GLES30.glCompileShader(it)
+        """); GLES30.glCompileShader(it)
         }
         return GLES30.glCreateProgram().also {
             GLES30.glAttachShader(it, v); GLES30.glAttachShader(it, f); GLES30.glLinkProgram(it)
@@ -414,8 +304,7 @@ class EglCore {
      */
     private fun createTex2DProgram(): Int {
         val v = GLES30.glCreateShader(GLES30.GL_VERTEX_SHADER).also {
-            GLES30.glShaderSource(
-                it, """#version 300 es
+            GLES30.glShaderSource(it, """#version 300 es
             layout(location = 0) in vec4 aPosition;
             layout(location = 1) in vec4 aTexCoord;
             uniform mat4 uMVPMatrix; 
@@ -424,19 +313,16 @@ class EglCore {
                 gl_Position = uMVPMatrix * aPosition; 
                 vTexCoord = aTexCoord.xy; 
             }
-        """
-            ); GLES30.glCompileShader(it)
+        """); GLES30.glCompileShader(it)
         }
         val f = GLES30.glCreateShader(GLES30.GL_FRAGMENT_SHADER).also {
-            GLES30.glShaderSource(
-                it, """#version 300 es
+            GLES30.glShaderSource(it, """#version 300 es
             precision mediump float;
             in vec2 vTexCoord;
             uniform sampler2D tex2D;
             layout(location = 0) out vec4 fragColor;
             void main() { fragColor = texture(tex2D, vTexCoord); }
-        """
-            ); GLES30.glCompileShader(it)
+        """); GLES30.glCompileShader(it)
         }
         return GLES30.glCreateProgram().also {
             GLES30.glAttachShader(it, v); GLES30.glAttachShader(it, f); GLES30.glLinkProgram(it)
@@ -454,6 +340,8 @@ class EglCore {
     /**
      * 向系统屏幕合成器 (SurfaceFlinger) 提交画面的真实硬件时间戳 (PTS)。
      * 它可以彻底消除 30fps 视频在 60Hz 屏幕上由于帧停留不均导致的持续性规律跳帧 (Judder)！
+     * @param eglSurface 目标表面
+     * @param n PTS 纳秒值
      */
     fun setPresentationTime(eglSurface: EGLSurface, n: Long) {
         EGLExt.eglPresentationTimeANDROID(eglDisplay, eglSurface, n)
@@ -462,62 +350,35 @@ class EglCore {
     /**
      * 利用 PBO (Pixel Buffer Object) 实现完全异步的零阻塞截帧。
      * 发送读取指令后 CPU 瞬间返回，由 GPU 后台通过 DMA 搬运数据，彻底消灭截图造成的卡顿。
+     * @param fboId 数据源离屏 FBO
+     * @param width 截取宽度
+     * @param height 截取高度
+     * @param renderHandler 发送回调的 Handler
+     * @param callback 成功或失败的闭包
      */
-    fun readPixelsFromFBOAsync(
-        fboId: Int,
-        width: Int,
-        height: Int,
-        renderHandler: Handler,
-        callback: (Bitmap?) -> Unit
-    ) {
+    fun readPixelsFromFBOAsync(fboId: Int, width: Int, height: Int, renderHandler: Handler, callback: (Bitmap?) -> Unit) {
         val pbo = IntArray(1)
         GLES30.glGenBuffers(1, pbo, 0)
-
-        // 绑定 PBO 通道并申请对应的显存空间
         GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, pbo[0])
-        GLES30.glBufferData(
-            GLES30.GL_PIXEL_PACK_BUFFER,
-            width * height * 4,
-            null,
-            GLES30.GL_STREAM_READ
-        )
-
-        // 将 FBO 画面“异步”抽入 PBO，这个方法现在会瞬间执行完毕，不会阻塞线程！
+        GLES30.glBufferData(GLES30.GL_PIXEL_PACK_BUFFER, width * height * 4, null, GLES30.GL_STREAM_READ)
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, fboId)
         GLES30.glReadPixels(0, 0, width, height, GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, 0)
-
-        // 解除挂载，让 GPU 在后台慢慢搬运
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
         GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, 0)
 
-        // 延迟 5ms（大约等待 GPU 渲染完两帧的时间）后再去收割数据
         renderHandler.postDelayed({
             try {
-                // 必须重新切回主环境，因为此时上下文本可能被其他任务占用
                 makeCurrentMain()
                 GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, pbo[0])
-
-                // 将 GPU 搬运好的内存映射给 CPU
-                val buffer = GLES30.glMapBufferRange(
-                    GLES30.GL_PIXEL_PACK_BUFFER,
-                    0,
-                    width * height * 4,
-                    GLES30.GL_MAP_READ_BIT
-                )
-
+                val buffer = GLES30.glMapBufferRange(GLES30.GL_PIXEL_PACK_BUFFER, 0, width * height * 4, GLES30.GL_MAP_READ_BIT)
                 if (buffer != null) {
                     val rawBitmap = createBitmap(width, height)
                     (buffer as ByteBuffer).order(ByteOrder.nativeOrder())
                     rawBitmap.copyPixelsFromBuffer(buffer)
                     GLES30.glUnmapBuffer(GLES30.GL_PIXEL_PACK_BUFFER)
-
-                    // 翻转并生成最终位图
                     val flipMatrix = android.graphics.Matrix().apply { postScale(1f, -1f) }
-                    val finalBitmap =
-                        Bitmap.createBitmap(rawBitmap, 0, 0, width, height, flipMatrix, true)
+                    val finalBitmap = Bitmap.createBitmap(rawBitmap, 0, 0, width, height, flipMatrix, true)
                     rawBitmap.recycle()
-
-                    // 切回主线程 UI 回调
                     Handler(Looper.getMainLooper()).post { callback(finalBitmap) }
                 } else {
                     Handler(Looper.getMainLooper()).post { callback(null) }
@@ -525,11 +386,10 @@ class EglCore {
             } catch (_: Exception) {
                 Handler(Looper.getMainLooper()).post { callback(null) }
             } finally {
-                // 彻底销毁 PBO 清理显存
                 GLES30.glBindBuffer(GLES30.GL_PIXEL_PACK_BUFFER, 0)
                 GLES30.glDeleteBuffers(1, pbo, 0)
             }
-        }, 5L) // 延迟 5 毫秒收割
+        }, 5L)
     }
 
     /**
@@ -537,12 +397,7 @@ class EglCore {
      */
     fun release() {
         if (eglDisplay != EGL14.EGL_NO_DISPLAY) {
-            EGL14.eglMakeCurrent(
-                eglDisplay,
-                EGL14.EGL_NO_SURFACE,
-                EGL14.EGL_NO_SURFACE,
-                EGL14.EGL_NO_CONTEXT
-            )
+            EGL14.eglMakeCurrent(eglDisplay, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
             EGL14.eglDestroySurface(eglDisplay, dummySurface)
             EGL14.eglDestroyContext(eglDisplay, eglContext)
             EGL14.eglTerminate(eglDisplay)
@@ -553,5 +408,4 @@ class EglCore {
         oesProgramId = 0
         tex2DProgramId = 0
     }
-
 }

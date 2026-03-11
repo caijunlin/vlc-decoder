@@ -44,7 +44,6 @@ class VLCVideoSurface(
 
     // 真实的业务状态确认
     private var isActuallyPlaying = false
-    override fun getUUId(): String = id
     override fun getTargetSurface(): Surface? = x5Surface
     override fun getTargetWidth(): Int = surfaceWidth
     override fun getTargetHeight(): Int = surfaceHeight
